@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In.printing.lab | Impressão 3D à medida</title>
+    <meta name="description" content="Peças de impressão 3D personalizadas: decoração, presentes, acessórios de simracing e muito mais. Encomenda online com confirmação garantida.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Supabase (base de dados das encomendas) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- EmailJS (envio do código de confirmação) -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script src="config.js"></script>
+    <style>
+        :root{
+            --bg: #050505;
+            --card: #111111;
+            --card-2: #121212;
+            --line: rgba(255,255,255,0.08);
+            --accent: #f97316;
+            --accent-2: #fb923c;
+        }
+        body { background-color: var(--bg); color: #e5e5e5; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; position: relative; min-height: 100vh; }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background-color: var(--bg);
+            background-image: radial-gradient(rgba(255,255,255,0.09) 1px, transparent 1px);
+            background-size: 26px 26px;
+            background-position: 0 0;
+        }
+        body::after {
+            content: "";
+            position: fixed;
+            inset: -10%;
+            z-index: -1;
+            background:
+                radial-gradient(45rem 30rem at 15% 20%, rgba(249,115,22,0.16), transparent 60%),
+                radial-gradient(38rem 26rem at 85% 75%, rgba(251,146,60,0.12), transparent 60%);
+            animation: derivaGlow 22s ease-in-out infinite alternate;
+            filter: blur(10px);
+        }
+        @keyframes derivaGlow {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(3%, -4%) scale(1.08); }
+            100% { transform: translate(-3%, 3%) scale(1); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            body::after { animation: none; }
+        }
+
+        #bg-elementos { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+        #bg-elementos svg { position: absolute; }
+        .bg-icon-branco { stroke: rgba(255,255,255,0.14); }
+        .bg-icon-laranja { stroke: rgba(249,115,22,0.20); }
+        #bg-elementos .flutua-lenta { animation: flutuaLenta 16s ease-in-out infinite; }
+        #bg-elementos .flutua-lenta-2 { animation: flutuaLenta 20s ease-in-out infinite reverse; }
+        @keyframes flutuaLenta {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-14px) rotate(3deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #bg-elementos .flutua-lenta, #bg-elementos .flutua-lenta-2 { animation: none; }
+        }
+        h1, h2, h3, .display { font-family: 'Space Grotesk', sans-serif; letter-spacing: 0.02em; }
+        .view { display: none; }
+        .view.active { display: block; animation: fadeIn .35s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .modal-scroll { max-height: 85vh; overflow-y: auto; scrollbar-width: none; }
+        .modal-scroll::-webkit-scrollbar { display: none; }
+
+        .card-produto { transition: border-color .25s ease, transform .2s ease; }
+        .card-produto:hover { border-color: rgba(255,255,255,0.18); transform: translateY(-2px); }
+        .card-produto img { transition: transform .4s ease; }
+        .card-produto:hover img { transform: scale(1.06); }
+
+        .chip { transition: all .2s ease; white-space: nowrap; }
+        .chip.active { background: var(--accent); color: #050505; border-color: var(--accent); }
+
+        #modal { backdrop-filter: blur(6px); }
+        #modal.hidden { display: none; }
+        #modal-content { animation: popIn .3s cubic-bezier(.2,.8,.2,1); }
+        @keyframes popIn { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+
+        .carrossel-wrap { position: relative; overflow: hidden; border-radius: 0.75rem; touch-action: pan-y; }
+        .carrossel-track { display: flex; transition: transform .3s ease; will-change: transform; }
+        .carrossel-track.dragging { transition: none; }
+        .carrossel-track img { width: 100%; flex: 0 0 100%; height: 14rem; object-fit: cover; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+        .dots { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
+        .dot { width: 6px; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.4); transition: all .2s ease; }
+        .dot.active { background: #fff; width: 16px; }
+        .carrossel-arrow { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.5); color: #fff; width: 28px; height: 28px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 13px; opacity: 0; transition: opacity .2s ease; }
+        .carrossel-wrap:hover .carrossel-arrow { opacity: 1; }
+
+        .empty-state { animation: fadeIn .3s ease; }
+
+        input[type="text"]:focus, input[type="search"]:focus, input[type="email"]:focus, input[type="tel"]:focus { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+
+        /* --- Novos elementos: hero, badges, passos, código --- */
+        .badge-confianca { border: 1px solid var(--line); background: rgba(255,255,255,0.03); }
+        .passo-numero { font-family: 'Space Grotesk', sans-serif; color: var(--accent); }
+        .codigo-input { letter-spacing: 0.5em; text-align: center; font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; }
+        .banner-erro { animation: fadeIn .25s ease; }
+        .stepper-dot { width: 8px; height: 8px; border-radius: 999px; background: rgba(255,255,255,0.15); }
+        .stepper-dot.ativo { background: var(--accent); }
+        .stepper-dot.feito { background: rgba(249,115,22,0.5); }
+        .spinner { width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.2); border-top-color: #000; border-radius: 999px; animation: girar .6s linear infinite; display: inline-block; }
+        @keyframes girar { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="bg-elementos" aria-hidden="true">
+        <svg class="flutua-lenta" style="top:6%; left:-3%;" width="180" height="180" viewBox="0 0 180 180" fill="none">
+            <g class="bg-icon-branco" stroke-width="1.4">
+                <path d="M40 60 L100 30 L160 60 L100 90 Z"/>
+                <path d="M40 60 L40 130 L100 160 L100 90"/>
+                <path d="M160 60 L160 130 L100 160"/>
+                <path d="M40 60 L100 90 M160 60 L100 90"/>
+            </g>
+        </svg>
+        <svg class="flutua-lenta-2" style="bottom:4%; right:-4%;" width="220" height="220" viewBox="0 0 220 220" fill="none">
+            <g class="bg-icon-laranja" stroke-width="1.4">
+                <circle cx="110" cy="110" r="46"/>
+                <circle cx="110" cy="110" r="18"/>
+                <path d="M110 44 L110 64 M110 156 L110 176 M44 110 L64 110 M156 110 L176 110
+                         M65 65 L79 79 M141 141 L155 155 M155 65 L141 79 M79 141 L65 155"/>
+            </g>
+        </svg>
+        <svg class="flutua-lenta" style="top:38%; right:4%;" width="150" height="120" viewBox="0 0 150 120" fill="none">
+            <g class="bg-icon-branco" stroke-width="1.3">
+                <path d="M10 20 Q40 10 75 20 T140 20"/>
+                <path d="M10 45 Q40 35 75 45 T140 45"/>
+                <path d="M10 70 Q40 60 75 70 T140 70"/>
+                <path d="M10 95 Q40 85 75 95 T140 95"/>
+            </g>
+        </svg>
+        <svg class="flutua-lenta-2" style="bottom:12%; left:6%;" width="130" height="150" viewBox="0 0 130 150" fill="none">
+            <g class="bg-icon-laranja" stroke-width="1.4">
+                <path d="M35 20 H95 L80 70 H50 Z"/>
+                <path d="M65 70 L65 100"/>
+                <circle cx="65" cy="112" r="10"/>
+                <path d="M35 20 H95" />
+            </g>
+        </svg>
+        <svg class="flutua-lenta" style="top:8%; right:16%;" width="90" height="90" viewBox="0 0 90 90" fill="none">
+            <g class="bg-icon-branco" stroke-width="1.2" opacity="0.8">
+                <path d="M20 30 L45 18 L70 30 L45 42 Z"/>
+                <path d="M20 30 L20 60 L45 72 L45 42"/>
+                <path d="M70 30 L70 60 L45 72"/>
+            </g>
+        </svg>
+    </div>
+
+    <div id="modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+        <div id="modal-content" class="bg-[#121212] p-8 rounded-2xl max-w-lg w-full border border-white/10 modal-scroll text-sm"></div>
+    </div>
+
+    <!-- Modal: consultar estado da encomenda -->
+    <div id="modal-estado" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+        <div class="bg-[#121212] p-8 rounded-2xl max-w-md w-full border border-white/10 text-sm">
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-lg font-bold text-white display">CONSULTAR ENCOMENDA</h3>
+                <button onclick="document.getElementById('modal-estado').classList.add('hidden')" class="text-white font-bold text-xl">X</button>
+            </div>
+            <p class="text-gray-400 text-xs mb-4">Introduz o número da encomenda (ex: LN-260728-001) e o email que usaste.</p>
+            <input id="estado-numero" type="text" placeholder="Nº da encomenda" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-3 text-white text-sm">
+            <input id="estado-email" type="email" placeholder="O teu email" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">
+            <button onclick="consultarEstadoEncomenda()" class="w-full bg-white text-black py-3 rounded-xl font-bold hover:bg-gray-200 transition text-sm">CONSULTAR</button>
+            <div id="estado-resultado" class="mt-4"></div>
+        </div>
+    </div>
+
+    <div id="view-catalogo" class="view active max-w-2xl mx-auto">
+        <header class="text-center mb-8">
+            <img src="ln.png" alt="Logo In.printing.lab" class="mx-auto h-24 mb-4 drop-shadow-md">
+            <p class="text-gray-400 text-sm max-w-md mx-auto leading-relaxed mb-5">
+                Peças impressas em 3D, desenhadas e personalizadas à tua medida — de presentes de Natal a acessórios de simracing.
+            </p>
+            <div class="flex flex-wrap justify-center gap-2 mb-6">
+                <span class="badge-confianca text-[11px] text-gray-300 px-3 py-1.5 rounded-full">🎨 Personalização incluída</span>
+                <span class="badge-confianca text-[11px] text-gray-300 px-3 py-1.5 rounded-full">📦 Feito por encomenda</span>
+                <span class="badge-confianca text-[11px] text-gray-300 px-3 py-1.5 rounded-full">✅ Confirmação por email</span>
+            </div>
+            <div class="h-px bg-gradient-to-r from-transparent via-white/20 to-transparent w-full"></div>
+        </header>
+
+        <!-- Como funciona -->
+        <section class="grid grid-cols-3 gap-3 mb-8 text-center">
+            <div class="bg-[#111111] border border-white/5 rounded-xl p-3">
+                <p class="passo-numero text-xs font-bold mb-1">01</p>
+                <p class="text-[11px] text-gray-400 leading-snug">Escolhes e personalizas a peça</p>
+            </div>
+            <div class="bg-[#111111] border border-white/5 rounded-xl p-3">
+                <p class="passo-numero text-xs font-bold mb-1">02</p>
+                <p class="text-[11px] text-gray-400 leading-snug">Confirmas por código enviado ao email</p>
+            </div>
+            <div class="bg-[#111111] border border-white/5 rounded-xl p-3">
+                <p class="passo-numero text-xs font-bold mb-1">03</p>
+                <p class="text-[11px] text-gray-400 leading-snug">Produzimos e combinamos a entrega</p>
+            </div>
+        </section>
+
+        <nav class="flex justify-between items-center mb-6 gap-2">
+            <h1 class="font-bold tracking-widest text-lg text-white display">CATÁLOGO</h1>
+            <div class="flex items-center gap-2">
+                <button onclick="abrirModalEstado()" class="text-[11px] text-gray-400 hover:text-white underline underline-offset-2 transition">A minha encomenda</button>
+                <button onclick="mudarVista('view-carrinho')" class="bg-white text-black px-6 py-2 font-bold rounded-full text-xs hover:bg-gray-200 transition">CARRINHO (<span id="count">0</span>)</button>
+            </div>
+        </nav>
+
+        <div class="relative mb-4">
+            <input type="search" id="pesquisa" placeholder="Pesquisar produto..." oninput="renderizarGrid()"
+                class="w-full bg-[#111111] border border-white/10 rounded-xl py-3 pl-4 pr-10 text-sm text-white placeholder:text-gray-500">
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">⌕</span>
+        </div>
+
+        <div id="categorias" class="flex gap-2 overflow-x-auto pb-4 mb-4 -mx-1 px-1"></div>
+
+        <div id="grid-produtos" class="flex flex-col gap-4"></div>
+
+        <footer class="text-center mt-12 pt-6 border-t border-white/5 text-[11px] text-gray-500 space-y-1">
+            <p id="footer-nome-loja">In.printing.lab — 3D Printing Lab</p>
+            <p>Dúvidas? Fala connosco pelo WhatsApp através do botão no carrinho.</p>
+        </footer>
+    </div>
+
+    <div id="view-carrinho" class="view max-w-2xl mx-auto">
+        <button onclick="voltarAoCatalogo()" class="text-gray-400 mb-6 font-bold hover:text-white transition">← VOLTAR À LOJA</button>
+        <div id="carrinho-conteudo" class="p-8 bg-[#121212] rounded-2xl border border-white/10"></div>
+    </div>
+
+    <script>
+        const produtos = [
+            { id: 1, nome: "Secador de Capacetes #CSC", preco: 95, categoria: "Auto & SimRacing", pasta: "Secador de Capacetes CSC", fotos: ["ssc1.png","ssc2.png","ssc3.png","ssc4.png"], personalizacao: [ {label:"Cor dos pés", placeholder:"ex: preto"}, {label:"Cor da base", placeholder:"ex: preto"}, {label:"Personalização (nome e/ou número)", placeholder:"ex: João, nº 7"} ], desc: "Secador de capacetes e luvas composto por 3 ventoinhas (uma de 120mm p/ capacete e duas de 60mm p/ luvas). Inclui botão de ligar/desligar e cabo de alimentação. Pode ser personalizada a cor do stand, número e nome. Tempo de entrega: 2 semanas." },
+            { id: 15, nome: "Secador de Capacetes e Luvas", preco: 95, categoria: "Auto & SimRacing", pasta: "Secador de Capacete e Luvas", fotos: ["scl1.png","scl2.png","scl3.png","scl4.png","scl5.png","scl6.png"], personalizacao: [ {label:"Cor dos pés", placeholder:"ex: preto"}, {label:"Cor da base", placeholder:"ex: preto"}, {label:"Personalização (nome e/ou número)", placeholder:"ex: João, nº 7"} ], desc: "Secador de capacetes e luvas.<br><br>Composto com 3 ventoinhas, uma de 120mm para secar o capacete e duas de 60mm para secar as luvas.<br>Inclui também um botão para ligar e desligar as ventoinhas e o respetivo cabo de alimentação.<br><br>Pode ser escolhida a cor só stand (pés e base) e pode ser incluída uma personalização, por exemplo com número e nome.<br><br>Valor sem personalização: 85€<br>Valor com personalização: 95€<br><br>Tempo previsto desde a encomenda à entrega: duas semanas." },
+            { id: 2, nome: "Indicador SimRacing (RPM/Bandeiras)", preco: 30, categoria: "Auto & SimRacing", pasta: "Indicador de mudança bandeiras rpm Simracig", fotos: ["sim1.png","sim2.png","sim3.png","sim4.png"], personalizacao: [], desc: "Indicador de mudança, bandeiras e rotação (RPM).<br><br><strong>Compatibilidade:</strong> Assetto Corsa e Competizione, iRacing, rFactor 2, Project CARS 1 e 2, Automobilista 1 e 2, F1 Series (2020-24), Dirt Rally 1 e 2.0, Euro Truck/American Truck Sim, RaceRoom, BeamNG.drive, Forza Horizon 4 e 5, Gran Turismo 7, Live for Speed, WRC, KartKraft.<br><br><strong>Detalhes:</strong> Ligação Micro USB. Cores dos LEDs totalmente personalizáveis." },
+            { id: 3, nome: "Bola de Natal - Cão", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Cão", fotos: ["au.png","auau.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Rex"}, {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de natal em forma de patinha. Disponível versão com asinhas para homenagem. Personalizada com nome. Diâmetro: 8cm. Escolha a cor da fita." },
+            { id: 4, nome: "Bola de Natal - Gato", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Gato", fotos: ["miau.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Mimi"}, {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de natal em forma de cabeça de gatinho. Disponível com asinhas. Personalizada com nome. Diâmetro: 8cm. Escolha a cor da fita." },
+            { id: 5, nome: "Bola de Natal - Melhor Auxiliar", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Melhor Auxiliar", fotos: ["aux1.png","aux2.png"], personalizacao: [ {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de natal para mimar os auxiliares. Personalizada com nome. Diâmetro: 8cm. Escolha a cor da fita." },
+            { id: 6, nome: "Bola de Natal - Professor(a)", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Melhor Professor(a)", fotos: ["prof1.png","prof2.png"], personalizacao: [ {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de natal para mimar os professores(as). Diâmetro: 8cm. Escolha a cor da fita." },
+            { id: 7, nome: "Bola de Natal - Educador(a)", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Melhor Educador(a)", fotos: ["educa1.png","educa2.png"], personalizacao: [ {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de Natal para o mimar os(as) Educadores(as) ! 🤍Escolha também a cor da fita para melhor condizer com a sua árvore de natal!Diametro de 8cm." },
+            { id: 8, nome: "Bola de Natal - Boas Festas", preco: 2.5, categoria: "Natal", pasta: "Bola Feliz Natal Boas Festas", fotos: ["festa1.png","festa2.png"], personalizacao: [ {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de Natal para quem não pode passar sem oferecer uma lembrança! 🤍Escolha também a cor da fita para melhor condizer com a sua árvore de natal!Diametro de 8cm." },
+            { id: 16, nome: "Bola de Natal Personalizada", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal Personalizada", fotos: ["personal.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Solange"}, {label:"Com asinhas (para homenagem)", tipo:"select", opcoes:["Sim","Não"]}, {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de Natal personalizada.<br><br>Também disponível versão com asinhas para homenagear os entes queridos 🤍<br><br>Personalizada com um nome à escolha.<br>Escolha também a cor da fita para melhor condizer com a sua árvore de natal!<br><br>Diâmetro de 8cm." },
+            { id: 9, nome: "Bola com Fotografia", preco: 10, categoria: "Natal", pasta: "Bola com Fotografia", fotos: ["ft1.png","ft2.png","ft3.png"], personalizacao: [ {label:"Detalhes da fotografia (envia a foto depois por WhatsApp)", placeholder:"ex: foto de família de Natal"} ], desc: "Bola personalizada com fotografia à sua escolha. Iluminada através das luzes da sua árvore de Natal." },
+            { id: 10, nome: "Caixa de Memórias", preco: 35, categoria: "Decoração & Presentes", pasta: "Caixa de memórias", fotos: ["1.png","2.png"], personalizacao: [ {label:"Cor da armação", placeholder:"ex: natural"}, {label:"Detalhes das fotografias (até 3, envia depois por WhatsApp)", placeholder:"ex: fotos de família"} ], desc: "Caixa de memórias que leva até 3 fotografias. É possível escolher a cor da armação." },
+            { id: 11, nome: "Nome Infinito", preco: 15, categoria: "Decoração & Presentes", pasta: "Nome infinito", fotos: ["nome_infinito.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Marta & João"}, {label:"Cor", placeholder:"ex: dourado"} ], desc: "Peça decorativa personalizável com nomes. Várias cores disponíveis." },
+            { id: 12, nome: "Base Monstera", preco: 10, categoria: "Decoração & Presentes", pasta: "Base coposvelas monsteras", fotos: ["base.png"], personalizacao: [ {label:"Cor", placeholder:"ex: verde"} ], desc: "Conjunto composto por 4 folhas de monstera com base. Dimensão folha: 8cm x 10cm x 0,4cm. Dimensão base: 8,5cm x 10,5cm x 2,2cm." },
+            { id: 13, nome: "Vaso Caveira", preco: 12, categoria: "Decoração & Presentes", pasta: "Caveiras vaso", fotos: ["cav1.png","cav2.png"], personalizacao: [ {label:"Cor", placeholder:"ex: preto"} ], desc: "Vaso decorativo para plantas ou para guardar chaves. Disponível em várias cores." },
+            { id: 14, nome: "Luminária NameLed", preco: 30, categoria: "Decoração & Presentes", pasta: "NameLed", fotos: ["nl1.png","nl2.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Beatriz"}, {label:"Cor(es) LED", placeholder:"ex: azul e branco"} ], desc: "Luminária personalizada com iluminação LED controlável com comando remoto. Permite até quatro cores diferentes. Dimensão máxima: 25cm x 25cm." }
+        ];
+
+        function caminhoFoto(produto, nomeFicheiro) {
+            if (!produto.pasta) return nomeFicheiro;
+            return encodeURIComponent(produto.pasta) + '/' + encodeURIComponent(nomeFicheiro);
+        }
+
+        let carrinho = [];
+        let categoriaAtiva = "Todos";
+
+        function mudarVista(id) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            if (id === 'view-carrinho') { estadoPedido = carrinho.length ? 'carrinho' : 'carrinho'; renderCarrinho(); }
+        }
+        function voltarAoCatalogo() {
+            if (estadoPedido === 'codigo' || estadoPedido === 'sucesso') {
+                if (!confirm('Se saíres agora perdes o progresso desta encomenda. Continuar?')) return;
+                if (estadoPedido === 'sucesso') { carrinho = []; document.getElementById('count').innerText = 0; }
+            }
+            estadoPedido = 'carrinho';
+            mudarVista('view-catalogo');
+        }
+
+        function renderizarCategorias() {
+            const categorias = ["Todos", ...new Set(produtos.map(p => p.categoria))];
+            const cont = document.getElementById('categorias');
+            cont.innerHTML = categorias.map(c => `
+                <button onclick="filtrarCategoria('${c}')" class="chip ${c === categoriaAtiva ? 'active' : ''} shrink-0 text-xs font-bold px-4 py-2 rounded-full border border-white/10 bg-[#111111] text-gray-300">${c}</button>
+            `).join('');
+        }
+
+        function filtrarCategoria(c) {
+            categoriaAtiva = c;
+            renderizarCategorias();
+            renderizarGrid();
+        }
+
+        function renderizarGrid() {
+            const termo = document.getElementById('pesquisa').value.trim().toLowerCase();
+            const grid = document.getElementById('grid-produtos');
+
+            const filtrados = produtos.filter(p => {
+                const passaCategoria = categoriaAtiva === "Todos" || p.categoria === categoriaAtiva;
+                const passaPesquisa = !termo || p.nome.toLowerCase().includes(termo) || p.desc.toLowerCase().includes(termo);
+                return passaCategoria && passaPesquisa;
+            });
+
+            if (filtrados.length === 0) {
+                grid.innerHTML = `<div class="empty-state text-center text-gray-500 text-sm py-16">Nenhum produto encontrado.</div>`;
+                return;
+            }
+
+            grid.innerHTML = filtrados.map(p => `
+                <div class="card-produto flex items-center gap-4 bg-[#111111] p-4 rounded-xl border border-white/5 cursor-pointer" onclick="abrirDescricao(${p.id})">
+                    <div class="w-16 h-16 rounded-lg overflow-hidden shrink-0">
+                        <img src="${caminhoFoto(p, p.fotos[0])}" class="w-full h-full object-cover">
+                    </div>
+                    <div class="flex-grow min-w-0">
+                        <h3 class="font-bold text-sm text-white truncate">${p.nome}</h3>
+                        <p class="text-orange-500 font-bold text-xs">${p.preco.toFixed(2)}€</p>
+                    </div>
+                    <button onclick="event.stopPropagation(); abrirDescricao(${p.id})" class="shrink-0 text-[10px] bg-white/5 px-4 py-2 rounded-lg border border-white/10 hover:bg-white hover:text-black transition">DETALHES</button>
+                </div>
+            `).join('');
+        }
+
+        let carrosselState = { fotos: [], index: 0, startX: 0, deltaX: 0, dragging: false };
+        let quantidadeAtual = 1;
+
+        function mudarQuantidade(delta) {
+            quantidadeAtual = Math.max(1, quantidadeAtual + delta);
+            const el = document.getElementById('qtd-valor');
+            if (el) el.innerText = quantidadeAtual;
+        }
+
+        function abrirDescricao(id) {
+            const p = produtos.find(prod => prod.id === id);
+            const modal = document.getElementById('modal');
+
+            carrosselState = { fotos: p.fotos, index: 0, startX: 0, deltaX: 0, dragging: false };
+
+            modal.classList.remove('hidden');
+            document.getElementById('modal-content').innerHTML = `
+                <div class="flex justify-end">
+                    <button onclick="document.getElementById('modal').classList.add('hidden')" class="text-white font-bold text-xl p-2">X</button>
+                </div>
+
+                <div class="carrossel-wrap mb-6" id="carrossel-wrap">
+                    <div class="carrossel-track" id="carrossel-track">
+                        ${p.fotos.map(f => `<img src="${caminhoFoto(p, f)}" draggable="false">`).join('')}
+                    </div>
+                    ${p.fotos.length > 1 ? `
+                        <button onclick="mudarFotoModal(-1)" class="carrossel-arrow" style="left:8px;">❮</button>
+                        <button onclick="mudarFotoModal(1)" class="carrossel-arrow" style="right:8px;">❯</button>
+                        <div class="dots">${p.fotos.map((_, i) => `<span class="dot ${i === 0 ? 'active' : ''}"></span>`).join('')}</div>
+                    ` : ''}
+                </div>
+
+                <h3 class="text-xl font-bold mb-2 text-white display">${p.nome}</h3>
+                <p class="text-gray-400 text-sm mb-6 leading-relaxed">${p.desc}</p>
+
+                <div class="flex items-center justify-between mb-4 bg-[#0a0a0a] rounded-xl p-3 border border-white/10">
+                    <span class="text-sm font-bold text-gray-300">Quantidade</span>
+                    <div class="flex items-center gap-4">
+                        <button onclick="mudarQuantidade(-1)" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg font-bold flex items-center justify-center transition">−</button>
+                        <span id="qtd-valor" class="font-bold text-white w-6 text-center text-lg">1</span>
+                        <button onclick="mudarQuantidade(1)" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg font-bold flex items-center justify-center transition">+</button>
+                    </div>
+                </div>
+
+                ${p.personalizacao && p.personalizacao.length ? `
+                <div class="mb-4">
+                    <p class="text-sm text-gray-400 mb-3">Preenche os detalhes da tua personalização:</p>
+                    ${p.personalizacao.map(campo => campo.tipo === 'select' ? `
+                        <label class="text-xs font-bold text-gray-400 mb-2 block">${campo.label}</label>
+                        <select class="personaliza-input w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-3 text-sm text-white mb-4" data-label="${campo.label}">
+                            <option value="">Escolhe...</option>
+                            ${campo.opcoes.map(op => `<option value="${op}">${op}</option>`).join('')}
+                        </select>
+                    ` : `
+                        <label class="text-xs font-bold text-gray-400 mb-2 block">${campo.label}</label>
+                        <input type="text" class="personaliza-input w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-3 text-sm text-white placeholder:text-gray-600 mb-4" data-label="${campo.label}" placeholder="${campo.placeholder || ''}">
+                    `).join('')}
+                </div>
+                ` : ''}
+
+                <button onclick="adicionar(${p.id})" class="w-full bg-white text-black py-4 rounded-xl font-bold hover:bg-gray-200 transition">ADICIONAR AO CARRINHO</button>
+            `;
+
+            quantidadeAtual = 1;
+
+            if (p.fotos.length > 1) ativarSwipe();
+        }
+
+        function atualizarCarrossel(comTransicao = true) {
+            const track = document.getElementById('carrossel-track');
+            if (!track) return;
+            track.classList.toggle('dragging', !comTransicao);
+            track.style.transform = `translateX(calc(${-carrosselState.index * 100}% + ${carrosselState.deltaX}px))`;
+            document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === carrosselState.index));
+        }
+
+        function mudarFotoModal(direcao) {
+            const total = carrosselState.fotos.length;
+            carrosselState.index = (carrosselState.index + direcao + total) % total;
+            carrosselState.deltaX = 0;
+            atualizarCarrossel();
+        }
+
+        function ativarSwipe() {
+            const wrap = document.getElementById('carrossel-wrap');
+            const track = document.getElementById('carrossel-track');
+            if (!wrap || !track) return;
+
+            const onStart = (x) => { carrosselState.dragging = true; carrosselState.startX = x; carrosselState.deltaX = 0; };
+            const onMove = (x) => {
+                if (!carrosselState.dragging) return;
+                carrosselState.deltaX = x - carrosselState.startX;
+                atualizarCarrossel(false);
+            };
+            const onEnd = () => {
+                if (!carrosselState.dragging) return;
+                carrosselState.dragging = false;
+                const limiar = wrap.clientWidth * 0.18;
+                if (carrosselState.deltaX < -limiar) mudarFotoModal(1);
+                else if (carrosselState.deltaX > limiar) mudarFotoModal(-1);
+                else { carrosselState.deltaX = 0; atualizarCarrossel(); }
+            };
+
+            wrap.addEventListener('touchstart', e => onStart(e.touches[0].clientX), { passive: true });
+            wrap.addEventListener('touchmove', e => onMove(e.touches[0].clientX), { passive: true });
+            wrap.addEventListener('touchend', onEnd);
+
+            wrap.addEventListener('mousedown', e => { e.preventDefault(); onStart(e.clientX); });
+            window.addEventListener('mousemove', e => onMove(e.clientX));
+            window.addEventListener('mouseup', onEnd);
+        }
+
+        function adicionar(id) {
+            const prod = produtos.find(p => p.id === id);
+            const inputs = document.querySelectorAll('#modal-content .personaliza-input');
+
+            const partes = [];
+            let algumPreenchido = false;
+            inputs.forEach(inp => {
+                const val = inp.value.trim();
+                inp.classList.remove('border-orange-500');
+                if (val) { algumPreenchido = true; partes.push(`${inp.dataset.label}: ${val}`); }
+            });
+
+            if (inputs.length > 0 && !algumPreenchido) {
+                inputs.forEach(inp => inp.classList.add('border-orange-500'));
+                return;
+            }
+
+            const obs = partes.join(' | ');
+
+            carrinho.push({ ...prod, obs, qtd: quantidadeAtual });
+            document.getElementById('count').innerText = carrinho.reduce((soma, i) => soma + i.qtd, 0);
+            document.getElementById('modal').classList.add('hidden');
+        }
+
+        /* =========================================================
+           FLUXO DE ENCOMENDA (carrinho -> dados -> código -> sucesso)
+           ========================================================= */
+
+        let estadoPedido = 'carrinho'; // carrinho | dados | codigo | sucesso
+        let pedidoAtual = null;        // { order_number, customer_name, customer_email, customer_phone, items, total }
+        let cooldownReenvio = 0;
+        let temporizadorReenvio = null;
+
+        function supabaseAtivo() {
+            return !!(window.supabase && CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY);
+        }
+        function emailAtivo() {
+            return !!(window.emailjs && CONFIG.EMAILJS_PUBLIC_KEY && CONFIG.EMAILJS_SERVICE_ID && CONFIG.EMAILJS_TEMPLATE_ID);
+        }
+        let _sb = null;
+        function getSupabase() {
+            if (!_sb && supabaseAtivo()) _sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+            return _sb;
+        }
+        if (window.emailjs && CONFIG.EMAILJS_PUBLIC_KEY) {
+            try { emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY); } catch (e) { console.warn('EmailJS init falhou', e); }
+        }
+
+        function stepperHtml(atual) {
+            const passos = ['carrinho', 'dados', 'codigo', 'sucesso'];
+            const idx = passos.indexOf(atual);
+            return `<div class="flex items-center gap-2 justify-center mb-6">
+                ${passos.map((p, i) => `<span class="stepper-dot ${i === idx ? 'ativo' : (i < idx ? 'feito' : '')}"></span>`).join('')}
+            </div>`;
+        }
+
+        function renderCarrinho() {
+            if (estadoPedido === 'dados') return renderFormDados();
+            if (estadoPedido === 'codigo') return renderCodigo();
+            if (estadoPedido === 'sucesso') return renderSucesso();
+
+            const cont = document.getElementById('carrinho-conteudo');
+            if (carrinho.length === 0) {
+                cont.innerHTML = `
+                    <h2 class="text-2xl font-bold mb-4 text-white display">O TEU PEDIDO</h2>
+                    <div class="empty-state text-center text-gray-500 text-sm py-10">
+                        O teu carrinho está vazio.<br>Volta ao catálogo para escolheres algo especial.
+                    </div>`;
+                return;
+            }
+            let total = carrinho.reduce((sum, i) => sum + i.preco * i.qtd, 0);
+            cont.innerHTML = `
+                <h2 class="text-2xl font-bold mb-6 text-white display">O TEU PEDIDO</h2>
+                <div class="space-y-4 mb-6">
+                    ${carrinho.map((i, index) => `
+                        <div class="flex justify-between items-center text-sm border-b border-white/5 pb-3">
+                            <div><p class="font-bold text-white">${i.nome} <span class="text-gray-400 font-normal">x${i.qtd}</span></p>${i.obs ? `<p class="text-orange-500">${i.obs}</p>` : ''}</div>
+                            <div class="text-right font-bold">${(i.preco * i.qtd).toFixed(2)}€ <button onclick="removerItem(${index})" class="text-gray-600 ml-3">X</button></div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="border-t border-white/10 pt-4 font-bold text-xl mb-6 text-orange-500">TOTAL: <span>${total.toFixed(2)}€</span></div>
+                <button onclick="irParaDados()" class="w-full bg-white text-black py-4 font-bold rounded-xl hover:bg-gray-200 transition">CONTINUAR</button>
+                ${!supabaseAtivo() ? `<p class="text-[11px] text-gray-500 text-center mt-3">A confirmação automática por email ainda não está configurada — a encomenda será enviada diretamente por WhatsApp.</p>` : ''}
+            `;
+        }
+        function removerItem(index) {
+            carrinho.splice(index, 1);
+            document.getElementById('count').innerText = carrinho.reduce((s,x)=>s+x.qtd,0);
+            renderCarrinho();
+        }
+
+        function irParaDados() {
+            if (carrinho.length === 0) return;
+            estadoPedido = 'dados';
+            renderCarrinho();
+        }
+
+        function renderFormDados() {
+            let total = carrinho.reduce((sum, i) => sum + i.preco * i.qtd, 0);
+            const cont = document.getElementById('carrinho-conteudo');
+            cont.innerHTML = `
+                ${stepperHtml('dados')}
+                <h2 class="text-xl font-bold mb-1 text-white display">OS TEUS DADOS</h2>
+                <p class="text-gray-500 text-xs mb-6">Vamos usar estes dados só para confirmar e tratar da tua encomenda.</p>
+
+                <div id="banner-erro-dados"></div>
+
+                <label class="text-xs font-bold text-gray-400 mb-1 block">Nome *</label>
+                <input id="input-nome" type="text" placeholder="O teu nome completo" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">
+
+                <label class="text-xs font-bold text-gray-400 mb-1 block">Email *</label>
+                <input id="input-email" type="email" placeholder="ex: nome@email.com" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">
+                <p class="text-[11px] text-gray-500 -mt-3 mb-4">Vamos enviar-te um código de confirmação para este email.</p>
+
+                <label class="text-xs font-bold text-gray-400 mb-1 block">Telemóvel (opcional)</label>
+                <input id="input-telefone" type="tel" placeholder="ex: 912 345 678" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-5 text-white text-sm">
+
+                <div class="bg-[#0a0a0a] rounded-xl p-4 border border-white/10 mb-5">
+                    <p class="text-xs font-bold text-gray-300 mb-2">Resumo</p>
+                    ${carrinho.map(i => `<p class="text-xs text-gray-400 mb-1">${i.nome} x${i.qtd}${i.obs ? ` — ${i.obs}` : ''}</p>`).join('')}
+                    <p class="text-sm font-bold text-orange-500 mt-2">Total: ${total.toFixed(2)}€</p>
+                </div>
+
+                <label class="flex items-start gap-2 mb-5 text-[11px] text-gray-400 cursor-pointer">
+                    <input id="input-termos" type="checkbox" class="mt-0.5">
+                    <span>Confirmo que revi os itens, quantidades e personalizações acima e que estão corretos.</span>
+                </label>
+
+                <div class="flex gap-3">
+                    <button onclick="estadoPedido='carrinho'; renderCarrinho();" class="flex-1 bg-white/5 border border-white/10 text-white py-4 font-bold rounded-xl hover:bg-white/10 transition text-sm">VOLTAR</button>
+                    <button id="btn-enviar-encomenda" onclick="enviarEncomenda()" class="flex-1 bg-white text-black py-4 font-bold rounded-xl hover:bg-gray-200 transition text-sm">ENVIAR ENCOMENDA</button>
+                </div>
+            `;
+        }
+
+        function mostrarErro(idContainer, mensagem) {
+            const el = document.getElementById(idContainer);
+            if (!el) return;
+            el.innerHTML = `<div class="banner-erro bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-xl p-3 mb-4">${mensagem}</div>`;
+        }
+
+        function validarEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+
+        async function enviarEncomenda() {
+            const nome = document.getElementById('input-nome').value.trim();
+            const email = document.getElementById('input-email').value.trim();
+            const telefone = document.getElementById('input-telefone').value.trim();
+            const termos = document.getElementById('input-termos').checked;
+            document.getElementById('banner-erro-dados').innerHTML = '';
+
+            if (nome.length < 2) return mostrarErro('banner-erro-dados', 'Indica o teu nome completo.');
+            if (!validarEmail(email)) return mostrarErro('banner-erro-dados', 'Introduz um email válido — é para lá que enviamos o código de confirmação.');
+            if (!termos) return mostrarErro('banner-erro-dados', 'Confirma que reviste os itens da encomenda antes de continuares.');
+
+            const total = carrinho.reduce((sum, i) => sum + i.preco * i.qtd, 0);
+            const itens = carrinho.map(i => ({ nome: i.nome, qtd: i.qtd, preco: i.preco, obs: i.obs || '' }));
+
+            const btn = document.getElementById('btn-enviar-encomenda');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner"></span> A enviar...`;
+
+            // Fallback: sem Supabase configurado, mantém o fluxo original via WhatsApp
+            if (!supabaseAtivo()) {
+                enviarWhatsAppDireto(nome, email, telefone, itens, total);
+                btn.disabled = false;
+                btn.innerText = 'ENVIAR ENCOMENDA';
+                return;
+            }
+
+            try {
+                const sb = getSupabase();
+                const { data, error } = await sb.rpc('create_order', {
+                    p_customer_name: nome,
+                    p_customer_email: email,
+                    p_customer_phone: telefone,
+                    p_items: itens,
+                    p_total: total
+                });
+
+                if (error) throw error;
+                const row = Array.isArray(data) ? data[0] : data;
+
+                pedidoAtual = { order_number: row.order_number, code: row.confirmation_code, customer_name: nome, customer_email: email, customer_phone: telefone, items: itens, total };
+
+                await enviarEmailCodigo(pedidoAtual);
+
+                estadoPedido = 'codigo';
+                cooldownReenvio = 45;
+                renderCarrinho();
+                iniciarCooldownReenvio();
+            } catch (err) {
+                console.error(err);
+                const msg = String(err && err.message || '');
+                let texto = 'Não foi possível registar a encomenda. Verifica a tua ligação à internet e tenta novamente.';
+                if (msg.includes('DEMASIADAS_ENCOMENDAS')) texto = 'Já fizeste várias encomendas em poucos minutos. Aguarda uns minutos ou contacta-nos diretamente por WhatsApp.';
+                if (msg.includes('EMAIL_INVALIDO')) texto = 'O email introduzido não é válido.';
+                mostrarErro('banner-erro-dados', texto + ' Também podes enviar já por WhatsApp usando o botão abaixo.');
+                document.getElementById('banner-erro-dados').innerHTML += `<button onclick='enviarWhatsAppDireto(${JSON.stringify(nome)}, ${JSON.stringify(email)}, ${JSON.stringify(telefone)}, ${JSON.stringify(itens)}, ${total})' class="w-full bg-[#25D366] text-black py-3 font-bold rounded-xl text-xs mt-1">ENVIAR JÁ POR WHATSAPP</button>`;
+                btn.disabled = false;
+                btn.innerText = 'ENVIAR ENCOMENDA';
+            }
+        }
+
+        async function enviarEmailCodigo(pedido) {
+            if (!emailAtivo()) return; // sem EmailJS configurado, o cliente vê o código no ecrã seguinte de qualquer forma como rede de segurança
+            const resumo = pedido.items.map(i => `${i.nome} x${i.qtd}${i.obs ? ' (' + i.obs + ')' : ''}`).join(', ');
+            try {
+                await emailjs.send(CONFIG.EMAILJS_SERVICE_ID, CONFIG.EMAILJS_TEMPLATE_ID, {
+                    to_email: pedido.customer_email,
+                    to_name: pedido.customer_name,
+                    order_number: pedido.order_number,
+                    code: pedido.code,
+                    items_resumo: resumo,
+                    total: pedido.total.toFixed(2) + '€',
+                    nome_loja: CONFIG.NOME_LOJA
+                });
+            } catch (e) {
+                console.warn('Falha ao enviar email de confirmação:', e);
+            }
+        }
+
+        function renderCodigo() {
+            const cont = document.getElementById('carrinho-conteudo');
+            cont.innerHTML = `
+                ${stepperHtml('codigo')}
+                <h2 class="text-xl font-bold mb-1 text-white display">CONFIRMA O TEU EMAIL</h2>
+                <p class="text-gray-500 text-xs mb-1">Enviámos um código de 6 dígitos para <span class="text-gray-300">${pedidoAtual.customer_email}</span>.</p>
+                <p class="text-gray-500 text-xs mb-6">Nº da encomenda: <span class="text-orange-500 font-bold">${pedidoAtual.order_number}</span></p>
+
+                <div id="banner-erro-codigo"></div>
+
+                <input id="input-codigo" type="text" inputmode="numeric" maxlength="6" placeholder="000000"
+                    class="codigo-input w-full p-4 bg-[#0a0a0a] border border-white/10 rounded-xl mb-5 text-white">
+
+                <button id="btn-confirmar-codigo" onclick="confirmarCodigoEncomenda()" class="w-full bg-white text-black py-4 font-bold rounded-xl hover:bg-gray-200 transition text-sm mb-3">CONFIRMAR ENCOMENDA</button>
+
+                <button id="btn-reenviar" onclick="reenviarCodigoEncomenda()" class="w-full bg-white/5 border border-white/10 text-gray-300 py-3 font-bold rounded-xl text-xs hover:bg-white/10 transition">
+                    REENVIAR CÓDIGO <span id="cooldown-txt"></span>
+                </button>
+                <p class="text-[11px] text-gray-600 text-center mt-4">O código expira 15 minutos depois de ser enviado. Não recebeste? Verifica o spam ou pede reenvio.</p>
+            `;
+        }
+
+        function iniciarCooldownReenvio() {
+            clearInterval(temporizadorReenvio);
+            atualizarBotaoReenvio();
+            temporizadorReenvio = setInterval(() => {
+                cooldownReenvio--;
+                atualizarBotaoReenvio();
+                if (cooldownReenvio <= 0) clearInterval(temporizadorReenvio);
+            }, 1000);
+        }
+        function atualizarBotaoReenvio() {
+            const btn = document.getElementById('btn-reenviar');
+            const txt = document.getElementById('cooldown-txt');
+            if (!btn) return;
+            if (cooldownReenvio > 0) {
+                btn.disabled = true;
+                txt.innerText = `(${cooldownReenvio}s)`;
+            } else {
+                btn.disabled = false;
+                txt.innerText = '';
+            }
+        }
+
+        async function confirmarCodigoEncomenda() {
+            const codigo = document.getElementById('input-codigo').value.trim();
+            document.getElementById('banner-erro-codigo').innerHTML = '';
+            if (!/^\d{6}$/.test(codigo)) return mostrarErro('banner-erro-codigo', 'Introduz o código de 6 dígitos que recebeste por email.');
+
+            const btn = document.getElementById('btn-confirmar-codigo');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner"></span> A confirmar...`;
+
+            try {
+                const sb = getSupabase();
+                const { data, error } = await sb.rpc('confirm_order', { p_order_number: pedidoAtual.order_number, p_code: codigo });
+                if (error) throw error;
+
+                if (data === 'ok') {
+                    estadoPedido = 'sucesso';
+                    renderCarrinho();
+                } else if (data === 'codigo_errado') {
+                    mostrarErro('banner-erro-codigo', 'Código incorreto. Confere o email e tenta novamente.');
+                } else if (data === 'expirado') {
+                    mostrarErro('banner-erro-codigo', 'O código expirou. Pede um novo código abaixo.');
+                } else if (data === 'demasiadas_tentativas') {
+                    mostrarErro('banner-erro-codigo', 'Demasiadas tentativas erradas. Contacta-nos por WhatsApp com o nº da encomenda ' + pedidoAtual.order_number + '.');
+                } else {
+                    mostrarErro('banner-erro-codigo', 'Não foi possível confirmar. Tenta novamente.');
+                }
+            } catch (err) {
+                console.error(err);
+                mostrarErro('banner-erro-codigo', 'Erro de ligação ao confirmar. Tenta novamente em instantes.');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'CONFIRMAR ENCOMENDA';
+            }
+        }
+
+        async function reenviarCodigoEncomenda() {
+            if (cooldownReenvio > 0) return;
+            try {
+                const sb = getSupabase();
+                const { data, error } = await sb.rpc('resend_code', { p_order_number: pedidoAtual.order_number });
+                if (error) throw error;
+                pedidoAtual.code = data;
+                await enviarEmailCodigo(pedidoAtual);
+                cooldownReenvio = 45;
+                iniciarCooldownReenvio();
+                document.getElementById('banner-erro-codigo').innerHTML = `<div class="text-green-400 text-xs mb-4">Novo código enviado para ${pedidoAtual.customer_email}.</div>`;
+            } catch (err) {
+                console.error(err);
+                mostrarErro('banner-erro-codigo', 'Não foi possível reenviar agora. Tenta de novo em instantes.');
+            }
+        }
+
+        function renderSucesso() {
+            const cont = document.getElementById('carrinho-conteudo');
+            const numeroWa = (CONFIG.WHATSAPP_NUMERO || '').replace(/\D/g,'');
+            let msgWa = `Olá! Confirmo a encomenda ${pedidoAtual.order_number} (${pedidoAtual.customer_name}):%0A`;
+            pedidoAtual.items.forEach(i => msgWa += `- ${i.nome} x${i.qtd}${i.obs ? ` (${i.obs})` : ''}%0A`);
+            msgWa += `%0ATOTAL: ${pedidoAtual.total.toFixed(2)}€`;
+
+            cont.innerHTML = `
+                ${stepperHtml('sucesso')}
+                <div class="text-center py-4">
+                    <div class="w-16 h-16 rounded-full bg-orange-500/15 border border-orange-500/30 flex items-center justify-center mx-auto mb-4 text-2xl">✅</div>
+                    <h2 class="text-xl font-bold mb-2 text-white display">ENCOMENDA CONFIRMADA</h2>
+                    <p class="text-gray-400 text-sm mb-1">Nº da encomenda</p>
+                    <p class="text-orange-500 font-bold text-2xl mb-6 display">${pedidoAtual.order_number}</p>
+                    <p class="text-gray-400 text-xs mb-6 leading-relaxed">Guarda este número — usa-o para consultares o estado da tua encomenda a qualquer momento em "A minha encomenda".</p>
+                </div>
+                <a href="https://wa.me/${numeroWa}?text=${msgWa}" target="_blank" class="block w-full text-center bg-white text-black py-4 font-bold rounded-xl hover:bg-gray-200 transition text-sm mb-3">AVISAR TAMBÉM POR WHATSAPP</a>
+                <button onclick="carrinho=[]; document.getElementById('count').innerText=0; estadoPedido='carrinho'; voltarAoCatalogo();" class="w-full bg-white/5 border border-white/10 text-gray-300 py-3 font-bold rounded-xl text-xs hover:bg-white/10 transition">VOLTAR AO CATÁLOGO</button>
+            `;
+        }
+
+        // Fallback sem Supabase: comportamento original (WhatsApp direto)
+        function enviarWhatsAppDireto(nome, email, telefone, itens, total) {
+            let msg = `Olá! Encomenda de ${nome} (${email}):%0A`;
+            itens.forEach(i => msg += `- ${i.nome} x${i.qtd}${i.obs ? ` (${i.obs})` : ''} - ${(i.preco * i.qtd).toFixed(2)}€%0A`);
+            msg += `%0ATOTAL: ${total.toFixed(2)}€`;
+
+            const numero = (CONFIG.WHATSAPP_NUMERO || '').replace(/\D/g,'');
+            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+            if (isMobile) {
+                const appUrl = `whatsapp://send?phone=${numero}&text=${msg}`;
+                const webUrl = `https://wa.me/${numero}?text=${msg}`;
+                window.location.href = appUrl;
+                setTimeout(() => { if (document.hasFocus()) window.location.href = webUrl; }, 1500);
+            } else {
+                window.open(`https://web.whatsapp.com/send?phone=${numero}&text=${msg}`, '_blank');
+            }
+        }
+
+        /* --- Consulta de estado da encomenda --- */
+        function abrirModalEstado() {
+            document.getElementById('estado-resultado').innerHTML = '';
+            document.getElementById('estado-numero').value = '';
+            document.getElementById('estado-email').value = '';
+            document.getElementById('modal-estado').classList.remove('hidden');
+        }
+        const ESTADO_LABELS = {
+            pending_confirmation: ['⏳ Aguarda confirmação', 'Confirma o código que recebeste por email.'],
+            confirmed: ['✅ Confirmada', 'Recebemos a tua encomenda, vamos processá-la em breve.'],
+            in_production: ['🛠️ Em produção', 'A tua peça está a ser impressa.'],
+            ready: ['📦 Pronta', 'A tua encomenda está pronta para entrega/levantamento.'],
+            delivered: ['🎉 Entregue', 'Encomenda já entregue. Obrigado!'],
+            cancelled: ['❌ Cancelada', 'Esta encomenda foi cancelada. Contacta-nos se não fizeste sentido.'],
+            expired: ['⚠️ Expirada', 'O código de confirmação expirou sem ser usado. Faz uma nova encomenda ou contacta-nos.']
+        };
+        async function consultarEstadoEncomenda() {
+            const numero = document.getElementById('estado-numero').value.trim();
+            const email = document.getElementById('estado-email').value.trim();
+            const res = document.getElementById('estado-resultado');
+            res.innerHTML = '';
+            if (!numero || !validarEmail(email)) { res.innerHTML = `<p class="text-red-400 text-xs">Preenche o número da encomenda e um email válido.</p>`; return; }
+            if (!supabaseAtivo()) { res.innerHTML = `<p class="text-gray-400 text-xs">Consulta automática indisponível. Contacta-nos por WhatsApp com o número da encomenda.</p>`; return; }
+            res.innerHTML = `<p class="text-gray-400 text-xs">A consultar...</p>`;
+            try {
+                const sb = getSupabase();
+                const { data, error } = await sb.rpc('get_order_status', { p_order_number: numero, p_email: email });
+                if (error) throw error;
+                if (!data || data.length === 0) { res.innerHTML = `<p class="text-red-400 text-xs">Não encontrámos nenhuma encomenda com esses dados.</p>`; return; }
+                const row = data[0];
+                const [titulo, desc] = ESTADO_LABELS[row.status] || ['—', ''];
+                res.innerHTML = `
+                    <div class="bg-[#0a0a0a] border border-white/10 rounded-xl p-4">
+                        <p class="font-bold text-white mb-1">${titulo}</p>
+                        <p class="text-gray-400 text-xs mb-2">${desc}</p>
+                        <p class="text-gray-500 text-[11px]">Total: ${Number(row.total).toFixed(2)}€</p>
+                    </div>`;
+            } catch (err) {
+                console.error(err);
+                res.innerHTML = `<p class="text-red-400 text-xs">Erro ao consultar. Tenta novamente.</p>`;
+            }
+        }
+
+        if (CONFIG && CONFIG.NOME_LOJA) document.getElementById('footer-nome-loja').innerText = CONFIG.NOME_LOJA + ' — 3D Printing Lab';
+
+        renderizarCategorias();
+        renderizarGrid();
+    </script>
+</body>
+</html>

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | In.printing.lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <style>
+        body { background:#050505; color:#e5e5e5; font-family:'Inter',sans-serif; min-height:100vh; }
+        h1,h2,h3,.display { font-family:'Space Grotesk',sans-serif; letter-spacing:.02em; }
+        .card { background:#111111; border:1px solid rgba(255,255,255,.08); }
+        .chip { transition:all .2s ease; }
+        .chip.active { background:#f97316; color:#050505; border-color:#f97316; }
+        .status-pill { font-size:10px; font-weight:700; padding:3px 10px; border-radius:999px; display:inline-block; white-space:nowrap; }
+        .st-pending_confirmation { background:rgba(250,204,21,.15); color:#facc15; }
+        .st-confirmed { background:rgba(249,115,22,.15); color:#f97316; }
+        .st-in_production { background:rgba(59,130,246,.15); color:#60a5fa; }
+        .st-ready { background:rgba(168,85,247,.15); color:#c084fc; }
+        .st-delivered { background:rgba(34,197,94,.15); color:#4ade80; }
+        .st-cancelled { background:rgba(239,68,68,.15); color:#f87171; }
+        .st-expired { background:rgba(107,114,128,.15); color:#9ca3af; }
+        .modal-scroll { max-height:85vh; overflow-y:auto; scrollbar-width:none; }
+        .modal-scroll::-webkit-scrollbar { display:none; }
+        .view { display:none; } .view.active { display:block; }
+        select, input { outline:none; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <!-- LOGIN -->
+    <div id="view-login" class="view active max-w-sm mx-auto mt-24">
+        <div class="card rounded-2xl p-8">
+            <h1 class="text-lg font-bold text-white text-center mb-1 display">PAINEL DO DONO</h1>
+            <p class="text-gray-500 text-xs text-center mb-6">In.printing.lab — gestão de encomendas</p>
+            <div id="login-erro" class="hidden bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-xl p-3 mb-4"></div>
+            <label class="text-xs font-bold text-gray-400 mb-1 block">Email</label>
+            <input id="login-email" type="email" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">
+            <label class="text-xs font-bold text-gray-400 mb-1 block">Password</label>
+            <input id="login-pass" type="password" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-5 text-white text-sm">
+            <button id="btn-login" onclick="fazerLogin()" class="w-full bg-white text-black py-3 font-bold rounded-xl hover:bg-gray-200 transition text-sm">ENTRAR</button>
+            <p class="text-[11px] text-gray-600 text-center mt-4">O teu login é criado no Supabase (Authentication → Users). Vê o guia CONFIGURACAO.md.</p>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="view-dashboard" class="view max-w-5xl mx-auto">
+        <header class="flex justify-between items-center mb-6 flex-wrap gap-3">
+            <div>
+                <h1 class="text-xl font-bold text-white display">ENCOMENDAS</h1>
+                <p class="text-gray-500 text-xs" id="user-email"></p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="carregarEncomendas()" class="text-xs bg-white/5 border border-white/10 px-4 py-2 rounded-full hover:bg-white/10 transition">↻ ATUALIZAR</button>
+                <button onclick="fazerLogout()" class="text-xs bg-white/5 border border-white/10 px-4 py-2 rounded-full hover:bg-white/10 transition">SAIR</button>
+            </div>
+        </header>
+
+        <div id="stats" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"></div>
+
+        <div class="flex gap-2 overflow-x-auto pb-2 mb-4" id="filtros"></div>
+
+        <div class="relative mb-4">
+            <input type="search" id="pesquisa-admin" placeholder="Pesquisar por nome, email, telefone ou nº de encomenda..." oninput="renderizarLista()"
+                class="w-full bg-[#111111] border border-white/10 rounded-xl py-3 pl-4 pr-4 text-sm text-white placeholder:text-gray-500">
+        </div>
+
+        <div id="lista-encomendas" class="flex flex-col gap-3"></div>
+    </div>
+
+    <!-- MODAL DETALHE -->
+    <div id="modal-detalhe" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+        <div id="modal-detalhe-content" class="bg-[#121212] p-6 rounded-2xl max-w-lg w-full border border-white/10 modal-scroll text-sm"></div>
+    </div>
+
+    <script>
+        if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY) {
+            document.body.innerHTML = `<div class="max-w-md mx-auto mt-24 card rounded-2xl p-8 text-center">
+                <h1 class="text-white font-bold mb-2 display">CONFIGURAÇÃO NECESSÁRIA</h1>
+                <p class="text-gray-400 text-sm">Preenche SUPABASE_URL e SUPABASE_ANON_KEY em <code class="text-orange-500">config.js</code> antes de usares o painel de admin. Segue o guia CONFIGURACAO.md.</p>
+            </div>`;
+            throw new Error('Supabase não configurado');
+        }
+
+        const sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+
+        const ESTADOS = [
+            { v: 'pending_confirmation', l: 'Aguarda confirmação' },
+            { v: 'confirmed', l: 'Confirmada' },
+            { v: 'in_production', l: 'Em produção' },
+            { v: 'ready', l: 'Pronta' },
+            { v: 'delivered', l: 'Entregue' },
+            { v: 'cancelled', l: 'Cancelada' },
+            { v: 'expired', l: 'Expirada' }
+        ];
+        let encomendas = [];
+        let filtroAtivo = 'ativas';
+
+        function mudarView(id) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        async function verificarSessao() {
+            const { data } = await sb.auth.getSession();
+            if (data.session) {
+                document.getElementById('user-email').innerText = data.session.user.email;
+                mudarView('view-dashboard');
+                carregarEncomendas();
+            } else {
+                mudarView('view-login');
+            }
+        }
+
+        async function fazerLogin() {
+            const email = document.getElementById('login-email').value.trim();
+            const pass = document.getElementById('login-pass').value;
+            const erroEl = document.getElementById('login-erro');
+            erroEl.classList.add('hidden');
+            const btn = document.getElementById('btn-login');
+            btn.disabled = true; btn.innerText = 'A entrar...';
+            const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+            btn.disabled = false; btn.innerText = 'ENTRAR';
+            if (error) {
+                erroEl.innerText = 'Email ou password incorretos.';
+                erroEl.classList.remove('hidden');
+                return;
+            }
+            verificarSessao();
+        }
+        async function fazerLogout() {
+            await sb.auth.signOut();
+            mudarView('view-login');
+        }
+
+        async function carregarEncomendas() {
+            const cont = document.getElementById('lista-encomendas');
+            cont.innerHTML = `<p class="text-gray-500 text-xs text-center py-8">A carregar...</p>`;
+            const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(300);
+            if (error) {
+                cont.innerHTML = `<p class="text-red-400 text-xs text-center py-8">Erro ao carregar encomendas: ${error.message}</p>`;
+                return;
+            }
+            encomendas = data || [];
+            renderizarStats();
+            renderizarFiltros();
+            renderizarLista();
+        }
+
+        function renderizarStats() {
+            const hoje = new Date().toDateString();
+            const pendentes = encomendas.filter(e => e.status === 'pending_confirmation').length;
+            const paraProcessar = encomendas.filter(e => e.status === 'confirmed').length;
+            const emProducao = encomendas.filter(e => e.status === 'in_production').length;
+            const hojeConfirmadas = encomendas.filter(e => e.confirmed_at && new Date(e.confirmed_at).toDateString() === hoje).length;
+
+            document.getElementById('stats').innerHTML = `
+                ${statCard('Aguardam confirmação', pendentes, 'text-yellow-400')}
+                ${statCard('Para processar', paraProcessar, 'text-orange-500')}
+                ${statCard('Em produção', emProducao, 'text-blue-400')}
+                ${statCard('Confirmadas hoje', hojeConfirmadas, 'text-green-400')}
+            `;
+        }
+        function statCard(label, valor, cor) {
+            return `<div class="card rounded-xl p-4">
+                <p class="text-2xl font-bold ${cor} display">${valor}</p>
+                <p class="text-[11px] text-gray-500">${label}</p>
+            </div>`;
+        }
+
+        function renderizarFiltros() {
+            const opcoes = [
+                { v: 'ativas', l: 'Ativas' },
+                { v: 'todas', l: 'Todas' },
+                ...ESTADOS
+            ];
+            document.getElementById('filtros').innerHTML = opcoes.map(o => `
+                <button onclick="filtroAtivo='${o.v}'; renderizarFiltros(); renderizarLista();"
+                    class="chip ${filtroAtivo === o.v ? 'active' : ''} shrink-0 text-xs font-bold px-4 py-2 rounded-full border border-white/10 bg-[#111111] text-gray-300">${o.l}</button>
+            `).join('');
+        }
+
+        function renderizarLista() {
+            const termo = document.getElementById('pesquisa-admin').value.trim().toLowerCase();
+            let lista = encomendas.filter(e => {
+                if (filtroAtivo === 'ativas') { if (['delivered','cancelled','expired'].includes(e.status)) return false; }
+                else if (filtroAtivo !== 'todas') { if (e.status !== filtroAtivo) return false; }
+                if (!termo) return true;
+                return (e.order_number + e.customer_name + e.customer_email + (e.customer_phone||'')).toLowerCase().includes(termo);
+            });
+
+            const cont = document.getElementById('lista-encomendas');
+            if (lista.length === 0) {
+                cont.innerHTML = `<p class="text-gray-500 text-xs text-center py-12">Nenhuma encomenda encontrada.</p>`;
+                return;
+            }
+            cont.innerHTML = lista.map(e => `
+                <div class="card rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer hover:border-white/20 transition" onclick="abrirDetalhe('${e.id}')">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="font-bold text-white text-sm">${e.order_number}</span>
+                            <span class="status-pill st-${e.status}">${estadoLabel(e.status)}</span>
+                        </div>
+                        <p class="text-gray-400 text-xs truncate">${e.customer_name} · ${e.customer_email}</p>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <p class="font-bold text-orange-500 text-sm">${Number(e.total).toFixed(2)}€</p>
+                        <p class="text-gray-600 text-[10px]">${new Date(e.created_at).toLocaleString('pt-PT')}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function estadoLabel(v) { const f = ESTADOS.find(s => s.v === v); return f ? f.l : v; }
+
+        function abrirDetalhe(id) {
+            const e = encomendas.find(x => x.id === id);
+            if (!e) return;
+            const modal = document.getElementById('modal-detalhe');
+            modal.classList.remove('hidden');
+            document.getElementById('modal-detalhe-content').innerHTML = `
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-white display">${e.order_number}</h3>
+                        <span class="status-pill st-${e.status}">${estadoLabel(e.status)}</span>
+                    </div>
+                    <button onclick="document.getElementById('modal-detalhe').classList.add('hidden')" class="text-white font-bold text-xl">X</button>
+                </div>
+
+                <div class="grid grid-cols-1 gap-1 mb-4 text-xs text-gray-400">
+                    <p><span class="text-gray-500">Nome:</span> ${e.customer_name}</p>
+                    <p><span class="text-gray-500">Email:</span> ${e.customer_email}</p>
+                    <p><span class="text-gray-500">Telefone:</span> ${e.customer_phone || '—'}</p>
+                    <p><span class="text-gray-500">Criada em:</span> ${new Date(e.created_at).toLocaleString('pt-PT')}</p>
+                    ${e.confirmed_at ? `<p><span class="text-gray-500">Confirmada em:</span> ${new Date(e.confirmed_at).toLocaleString('pt-PT')}</p>` : ''}
+                    ${e.confirmation_attempts > 0 ? `<p><span class="text-gray-500">Tentativas de código erradas:</span> ${e.confirmation_attempts}</p>` : ''}
+                </div>
+
+                <div class="bg-[#0a0a0a] rounded-xl p-4 border border-white/10 mb-4">
+                    <p class="text-xs font-bold text-gray-300 mb-2">Itens</p>
+                    ${(e.items || []).map(i => `<p class="text-xs text-gray-400 mb-1">${i.nome} x${i.qtd}${i.obs ? ` — <span class="text-orange-500">${i.obs}</span>` : ''} <span class="text-gray-600">(${(i.preco*i.qtd).toFixed(2)}€)</span></p>`).join('')}
+                    <p class="text-sm font-bold text-orange-500 mt-2">Total: ${Number(e.total).toFixed(2)}€</p>
+                </div>
+
+                <label class="text-xs font-bold text-gray-400 mb-1 block">Alterar estado</label>
+                <select id="select-estado" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-3 text-white text-sm">
+                    ${ESTADOS.map(s => `<option value="${s.v}" ${s.v === e.status ? 'selected' : ''}>${s.l}</option>`).join('')}
+                </select>
+
+                <label class="text-xs font-bold text-gray-400 mb-1 block">Notas internas</label>
+                <textarea id="admin-notas" rows="3" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">${e.admin_notes || ''}</textarea>
+
+                <div id="detalhe-msg" class="hidden text-xs mb-3"></div>
+
+                <button onclick="guardarAlteracoes('${e.id}')" class="w-full bg-white text-black py-3 font-bold rounded-xl hover:bg-gray-200 transition text-sm mb-2">GUARDAR ALTERAÇÕES</button>
+                <a href="https://wa.me/${(e.customer_phone||'').replace(/\\D/g,'')}" target="_blank" class="block text-center w-full bg-white/5 border border-white/10 text-gray-300 py-3 font-bold rounded-xl text-xs hover:bg-white/10 transition">CONTACTAR POR WHATSAPP</a>
+            `;
+        }
+
+        async function guardarAlteracoes(id) {
+            const novoEstado = document.getElementById('select-estado').value;
+            const notas = document.getElementById('admin-notas').value;
+            const msgEl = document.getElementById('detalhe-msg');
+            const { error } = await sb.from('orders').update({ status: novoEstado, admin_notes: notas }).eq('id', id);
+            msgEl.classList.remove('hidden');
+            if (error) {
+                msgEl.className = 'text-xs mb-3 text-red-400';
+                msgEl.innerText = 'Erro ao guardar: ' + error.message;
+                return;
+            }
+            msgEl.className = 'text-xs mb-3 text-green-400';
+            msgEl.innerText = 'Guardado com sucesso.';
+            await carregarEncomendas();
+            setTimeout(() => document.getElementById('modal-detalhe').classList.add('hidden'), 700);
+        }
+
+        verificarSessao();
+    </script>
+</body>
+</html>
