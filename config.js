@@ -9,8 +9,8 @@
 
 const CONFIG = {
     // --- Supabase (base de dados das encomendas + login do admin) ---
-    SUPABASE_URL: "",           // ex: "https://abcdefgh.supabase.co"
-    SUPABASE_ANON_KEY: "",      // a "anon public key" do teu projeto Supabase
+    SUPABASE_URL: "https://shsqdehjtuknxfalexqy.supabase.co",           // ex: "https://abcdefgh.supabase.co"
+    SUPABASE_ANON_KEY: "sb_publishable_0uCOFv-r3Zdv3yOuBdWvEA_2toOfN4F",      // a "anon public key" do teu projeto Supabase
 
     // --- EmailJS (envio do código de confirmação por email) ---
     EMAILJS_PUBLIC_KEY: "",     // Account > General > Public Key
