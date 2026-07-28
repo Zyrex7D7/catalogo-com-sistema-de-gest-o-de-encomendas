@@ -828,7 +828,6 @@
             
             try {
                 const sb = getSupabase();
-                // Usamos a função nova que só pede o email
                 const { data, error } = await sb.rpc('get_customer_orders', { p_email: email });
                 
                 if (error) throw error;
@@ -840,7 +839,6 @@
                 
                 let htmlFinal = '';
                 
-                // Desenhar um cartão para cada encomenda do histórico
                 data.forEach(row => {
                     const [titulo, desc] = ESTADO_LABELS[row.status] || ['—', ''];
                     
@@ -849,15 +847,20 @@
                         itensHtml = row.items.map(i => `<p class="text-xs text-gray-400 mb-1">${i.nome} x${i.qtd}${i.obs ? ' <span class="text-orange-500">(' + i.obs + ')</span>' : ''}</p>`).join('');
                     }
 
-                    // Se estiver pendente, mostrar o botão de confirmação!
+                    // Botões de Confirmar e Cancelar se estiver pendente
                     let acaoHtml = '';
                     if (row.status === 'pending_confirmation' && row.confirmation_code) {
                         acaoHtml = `
                             <div class="mt-3 p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl text-center">
                                 <p class="text-orange-500 text-[11px] mb-2">Aguarda confirmação (Código: <b>${row.confirmation_code}</b>)</p>
-                                <button onclick="confirmarDireto('${row.order_number}', '${row.confirmation_code}')" class="w-full bg-orange-500 text-black py-2 font-bold rounded-lg text-xs hover:bg-orange-600 transition">
-                                    CONFIRMAR AGORA
-                                </button>
+                                <div class="flex gap-2 mt-2">
+                                    <button onclick="confirmarDireto('${row.order_number}', '${row.confirmation_code}')" class="flex-1 bg-orange-500 text-black py-2 font-bold rounded-lg text-xs hover:bg-orange-600 transition">
+                                        CONFIRMAR
+                                    </button>
+                                    <button onclick="cancelarDireto('${row.order_number}', '${email}')" class="flex-1 bg-red-500/10 border border-red-500/30 text-red-400 py-2 font-bold rounded-lg text-xs hover:bg-red-500/20 transition">
+                                        CANCELAR
+                                    </button>
+                                </div>
                             </div>
                         `;
                     }
@@ -878,7 +881,6 @@
                     `;
                 });
 
-                // A lista ganha scroll se houver muitas encomendas
                 res.innerHTML = `<div class="max-h-80 overflow-y-auto pr-1">${htmlFinal}</div>`;
                 
             } catch (err) {
@@ -898,12 +900,35 @@
                 if (error) throw error;
                 
                 if (data === 'ok') {
-                    // Após confirmar, recarrega a lista para mostrar o estado atualizado (Verde)
                     consultarEstadoEncomenda(); 
                 } else if (data === 'expirado') {
                     res.innerHTML = `<p class="text-red-400 text-xs mt-4">O código expirou. Contacta-nos por WhatsApp.</p>`;
                 } else {
                     res.innerHTML = `<p class="text-red-400 text-xs mt-4">Erro ao confirmar (${data}). Tenta novamente.</p>`;
+                }
+            } catch (err) {
+                console.error(err);
+                res.innerHTML = `<p class="text-red-400 text-xs mt-4">Erro de ligação. Tenta novamente.</p>`;
+            }
+        }
+
+        // Nova função para cancelar a encomenda
+        async function cancelarDireto(numero, email) {
+            if (!confirm(`Tens a certeza que queres cancelar a encomenda ${numero}?`)) return;
+
+            const res = document.getElementById('estado-resultado');
+            res.innerHTML = `<p class="text-gray-400 text-xs">A cancelar a encomenda ${numero}...</p>`;
+            
+            try {
+                const sb = getSupabase();
+                const { data, error } = await sb.rpc('cancel_pending_order', { p_order_number: numero, p_email: email });
+                
+                if (error) throw error;
+                
+                if (data === 'ok') {
+                    consultarEstadoEncomenda(); // Recarrega a lista para mostrar o estado Cancelado (Vermelho)
+                } else {
+                    res.innerHTML = `<p class="text-red-400 text-xs mt-4">Erro ao cancelar (${data}). Tenta novamente.</p>`;
                 }
             } catch (err) {
                 console.error(err);
