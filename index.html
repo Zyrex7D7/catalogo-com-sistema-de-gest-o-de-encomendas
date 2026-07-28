@@ -161,17 +161,17 @@
         <div id="modal-content" class="bg-[#121212] p-8 rounded-2xl max-w-lg w-full border border-white/10 modal-scroll text-sm"></div>
     </div>
 
-    <!-- Modal: consultar estado da encomenda -->
+    
+    <!-- Modal: consultar histórico de encomendas -->
     <div id="modal-estado" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
         <div class="bg-[#121212] p-8 rounded-2xl max-w-md w-full border border-white/10 text-sm">
             <div class="flex justify-between items-start mb-4">
-                <h3 class="text-lg font-bold text-white display">CONSULTAR ENCOMENDA</h3>
+                <h3 class="text-lg font-bold text-white display">AS MINHAS ENCOMENDAS</h3>
                 <button onclick="document.getElementById('modal-estado').classList.add('hidden')" class="text-white font-bold text-xl">X</button>
             </div>
-            <p class="text-gray-400 text-xs mb-4">Introduz o número da encomenda (ex: LN-260728-001) e o email que usaste.</p>
-            <input id="estado-numero" type="text" placeholder="Nº da encomenda" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-3 text-white text-sm">
+            <p class="text-gray-400 text-xs mb-4">Introduz o teu email para veres o teu histórico e confirmares encomendas pendentes.</p>
             <input id="estado-email" type="email" placeholder="O teu email" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">
-            <button onclick="consultarEstadoEncomenda()" class="w-full bg-white text-black py-3 rounded-xl font-bold hover:bg-gray-200 transition text-sm">CONSULTAR</button>
+            <button onclick="consultarEstadoEncomenda()" class="w-full bg-white text-black py-3 rounded-xl font-bold hover:bg-gray-200 transition text-sm">VER ENCOMENDAS</button>
             <div id="estado-resultado" class="mt-4"></div>
         </div>
     </div>
@@ -547,7 +547,7 @@
                 <input id="input-email" type="email" placeholder="ex: nome@email.com" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">
                 <p class="text-[11px] text-gray-500 -mt-3 mb-4">Vamos enviar-te um código de confirmação para este email.</p>
 
-                <label class="text-xs font-bold text-gray-400 mb-1 block">Telemóvel (opcional)</label>
+                <label class="text-xs font-bold text-gray-400 mb-1 block">Telemóvel </label>
                 <input id="input-telefone" type="tel" placeholder="ex: 912 345 678" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-5 text-white text-sm">
 
                 <div class="bg-[#0a0a0a] rounded-xl p-4 border border-white/10 mb-5">
@@ -585,6 +585,7 @@
             const termos = document.getElementById('input-termos').checked;
             document.getElementById('banner-erro-dados').innerHTML = '';
 
+            if (telefone.length < 9) return mostrarErro('banner-erro-dados', 'Indica o teu número de telemóvel para podermos contactar.');
             if (nome.length < 2) return mostrarErro('banner-erro-dados', 'Indica o teu nome completo.');
             if (!validarEmail(email)) return mostrarErro('banner-erro-dados', 'Introduz um email válido — é para lá que enviamos o código de confirmação.');
             if (!termos) return mostrarErro('banner-erro-dados', 'Confirma que reviste os itens da encomenda antes de continuares.');
@@ -795,7 +796,7 @@
         /* --- Consulta de estado da encomenda --- */
         function abrirModalEstado() {
             document.getElementById('estado-resultado').innerHTML = '';
-            document.getElementById('estado-numero').value = '';
+            // Já não tentamos limpar o 'estado-numero' porque ele foi apagado
             document.getElementById('estado-email').value = '';
             document.getElementById('modal-estado').classList.remove('hidden');
         }
@@ -809,29 +810,104 @@
             expired: ['⚠️ Expirada', 'O código de confirmação expirou sem ser usado. Faz uma nova encomenda ou contacta-nos.']
         };
         async function consultarEstadoEncomenda() {
-            const numero = document.getElementById('estado-numero').value.trim();
             const email = document.getElementById('estado-email').value.trim();
             const res = document.getElementById('estado-resultado');
+            
             res.innerHTML = '';
-            if (!numero || !validarEmail(email)) { res.innerHTML = `<p class="text-red-400 text-xs">Preenche o número da encomenda e um email válido.</p>`; return; }
-            if (!supabaseAtivo()) { res.innerHTML = `<p class="text-gray-400 text-xs">Consulta automática indisponível. Contacta-nos por WhatsApp com o número da encomenda.</p>`; return; }
-            res.innerHTML = `<p class="text-gray-400 text-xs">A consultar...</p>`;
+            
+            if (!validarEmail(email)) { 
+                res.innerHTML = `<p class="text-red-400 text-xs">Preenche um email válido.</p>`; 
+                return; 
+            }
+            if (!supabaseAtivo()) { 
+                res.innerHTML = `<p class="text-gray-400 text-xs">Consulta automática indisponível. Contacta-nos por WhatsApp.</p>`; 
+                return; 
+            }
+            
+            res.innerHTML = `<p class="text-gray-400 text-xs">A procurar as tuas encomendas...</p>`;
+            
             try {
                 const sb = getSupabase();
-                const { data, error } = await sb.rpc('get_order_status', { p_order_number: numero, p_email: email });
+                // Usamos a função nova que só pede o email
+                const { data, error } = await sb.rpc('get_customer_orders', { p_email: email });
+                
                 if (error) throw error;
-                if (!data || data.length === 0) { res.innerHTML = `<p class="text-red-400 text-xs">Não encontrámos nenhuma encomenda com esses dados.</p>`; return; }
-                const row = data[0];
-                const [titulo, desc] = ESTADO_LABELS[row.status] || ['—', ''];
-                res.innerHTML = `
-                    <div class="bg-[#0a0a0a] border border-white/10 rounded-xl p-4">
-                        <p class="font-bold text-white mb-1">${titulo}</p>
-                        <p class="text-gray-400 text-xs mb-2">${desc}</p>
-                        <p class="text-gray-500 text-[11px]">Total: ${Number(row.total).toFixed(2)}€</p>
-                    </div>`;
+                
+                if (!data || data.length === 0) { 
+                    res.innerHTML = `<p class="text-red-400 text-xs">Não encontrámos nenhuma encomenda para este email.</p>`; 
+                    return; 
+                }
+                
+                let htmlFinal = '';
+                
+                // Desenhar um cartão para cada encomenda do histórico
+                data.forEach(row => {
+                    const [titulo, desc] = ESTADO_LABELS[row.status] || ['—', ''];
+                    
+                    let itensHtml = '';
+                    if (row.items && row.items.length > 0) {
+                        itensHtml = row.items.map(i => `<p class="text-xs text-gray-400 mb-1">${i.nome} x${i.qtd}${i.obs ? ' <span class="text-orange-500">(' + i.obs + ')</span>' : ''}</p>`).join('');
+                    }
+
+                    // Se estiver pendente, mostrar o botão de confirmação!
+                    let acaoHtml = '';
+                    if (row.status === 'pending_confirmation' && row.confirmation_code) {
+                        acaoHtml = `
+                            <div class="mt-3 p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl text-center">
+                                <p class="text-orange-500 text-[11px] mb-2">Aguarda confirmação (Código: <b>${row.confirmation_code}</b>)</p>
+                                <button onclick="confirmarDireto('${row.order_number}', '${row.confirmation_code}')" class="w-full bg-orange-500 text-black py-2 font-bold rounded-lg text-xs hover:bg-orange-600 transition">
+                                    CONFIRMAR AGORA
+                                </button>
+                            </div>
+                        `;
+                    }
+
+                    htmlFinal += `
+                        <div class="bg-[#0a0a0a] border border-white/10 rounded-xl p-4 mb-3">
+                            <div class="flex justify-between items-start mb-2">
+                                <p class="font-bold text-white">${row.order_number}</p>
+                                <span class="text-[10px] text-gray-500">${new Date(row.created_at).toLocaleDateString('pt-PT')}</span>
+                            </div>
+                            <p class="font-bold text-gray-300 text-xs mb-3">${titulo}</p>
+                            <div class="mb-3 border-t border-white/5 pt-2">
+                                ${itensHtml}
+                            </div>
+                            <p class="text-gray-500 text-[11px] font-bold">Total: ${Number(row.total).toFixed(2)}€</p>
+                            ${acaoHtml}
+                        </div>
+                    `;
+                });
+
+                // A lista ganha scroll se houver muitas encomendas
+                res.innerHTML = `<div class="max-h-80 overflow-y-auto pr-1">${htmlFinal}</div>`;
+                
             } catch (err) {
                 console.error(err);
-                res.innerHTML = `<p class="text-red-400 text-xs">Erro ao consultar. Tenta novamente.</p>`;
+                res.innerHTML = `<p class="text-red-400 text-xs">Erro ao consultar o histórico. Tenta novamente.</p>`;
+            }
+        }
+
+        async function confirmarDireto(numero, codigo) {
+            const res = document.getElementById('estado-resultado');
+            res.innerHTML = `<p class="text-gray-400 text-xs">A confirmar a encomenda ${numero}...</p>`;
+            
+            try {
+                const sb = getSupabase();
+                const { data, error } = await sb.rpc('confirm_order', { p_order_number: numero, p_code: codigo });
+                
+                if (error) throw error;
+                
+                if (data === 'ok') {
+                    // Após confirmar, recarrega a lista para mostrar o estado atualizado (Verde)
+                    consultarEstadoEncomenda(); 
+                } else if (data === 'expirado') {
+                    res.innerHTML = `<p class="text-red-400 text-xs mt-4">O código expirou. Contacta-nos por WhatsApp.</p>`;
+                } else {
+                    res.innerHTML = `<p class="text-red-400 text-xs mt-4">Erro ao confirmar (${data}). Tenta novamente.</p>`;
+                }
+            } catch (err) {
+                console.error(err);
+                res.innerHTML = `<p class="text-red-400 text-xs mt-4">Erro de ligação. Tenta novamente.</p>`;
             }
         }
 
