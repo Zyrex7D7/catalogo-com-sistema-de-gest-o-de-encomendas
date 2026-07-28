@@ -50,15 +50,23 @@
     <div id="view-dashboard" class="view max-w-5xl mx-auto">
         <header class="flex justify-between items-center mb-6 flex-wrap gap-3">
             <div>
-                <h1 class="text-xl font-bold text-white display">ENCOMENDAS</h1>
+                <h1 class="text-xl font-bold text-white display">PAINEL DO DONO</h1>
                 <p class="text-gray-500 text-xs" id="user-email"></p>
             </div>
             <div class="flex gap-2">
-                <button onclick="carregarEncomendas()" class="text-xs bg-white/5 border border-white/10 px-4 py-2 rounded-full hover:bg-white/10 transition">↻ ATUALIZAR</button>
                 <button onclick="fazerLogout()" class="text-xs bg-white/5 border border-white/10 px-4 py-2 rounded-full hover:bg-white/10 transition">SAIR</button>
             </div>
         </header>
 
+        <div class="flex gap-2 mb-6">
+            <button onclick="mudarAba('encomendas')" id="aba-encomendas" class="chip active text-xs font-bold px-5 py-2 rounded-full border border-white/10 bg-[#111111] text-gray-300">ENCOMENDAS</button>
+            <button onclick="mudarAba('produtos')" id="aba-produtos" class="chip text-xs font-bold px-5 py-2 rounded-full border border-white/10 bg-[#111111] text-gray-300">PRODUTOS</button>
+        </div>
+
+        <div id="painel-encomendas">
+        <div class="flex justify-end mb-4">
+            <button onclick="carregarEncomendas()" class="text-xs bg-white/5 border border-white/10 px-4 py-2 rounded-full hover:bg-white/10 transition">↻ ATUALIZAR</button>
+        </div>
         <div id="stats" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"></div>
 
         <div class="flex gap-2 overflow-x-auto pb-2 mb-4" id="filtros"></div>
@@ -69,11 +77,26 @@
         </div>
 
         <div id="lista-encomendas" class="flex flex-col gap-3"></div>
+        </div>
+
+        <!-- PAINEL PRODUTOS -->
+        <div id="painel-produtos" class="hidden">
+            <div class="flex justify-between items-center mb-4 gap-3 flex-wrap">
+                <p class="text-gray-500 text-xs">Cria, edita ou remove os produtos que aparecem no catálogo.</p>
+                <button onclick="abrirFormProduto()" class="text-xs bg-white text-black font-bold px-4 py-2 rounded-full hover:bg-gray-200 transition">+ NOVO PRODUTO</button>
+            </div>
+            <div id="lista-produtos" class="flex flex-col gap-3"></div>
+        </div>
     </div>
 
-    <!-- MODAL DETALHE -->
+    <!-- MODAL DETALHE ENCOMENDA -->
     <div id="modal-detalhe" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
         <div id="modal-detalhe-content" class="bg-[#121212] p-6 rounded-2xl max-w-lg w-full border border-white/10 modal-scroll text-sm"></div>
+    </div>
+
+    <!-- MODAL PRODUTO (criar/editar) -->
+    <div id="modal-produto" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+        <div id="modal-produto-content" class="bg-[#121212] p-6 rounded-2xl max-w-lg w-full border border-white/10 modal-scroll text-sm"></div>
     </div>
 
     <script>
@@ -116,46 +139,21 @@
         }
 
         async function fazerLogin() {
-    const email = document.getElementById('login-email').value.trim();
-    const pass = document.getElementById('login-pass').value;
-    const erroEl = document.getElementById('login-erro');
-    
-    // 1. Esconde mensagens de erro anteriores
-    erroEl.classList.add('hidden');
-    
-    // 2. Validação simples para evitar que o Supabase crashe com formatos inválidos
-    if (!email || !email.includes('@')) {
-        erroEl.innerText = 'Por favor, introduz um endereço de email válido.';
-        erroEl.classList.remove('hidden');
-        return;
-    }
-
-    const btn = document.getElementById('btn-login');
-    btn.disabled = true; 
-    btn.innerText = 'A entrar...';
-
-    // 3. Bloco try...catch para apanhar falhas de rede ou exceções
-    try {
-        const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-        
-        btn.disabled = false; 
-        btn.innerText = 'ENTRAR';
-        
-        if (error) {
-            erroEl.innerText = 'Email ou password incorretos.';
-            erroEl.classList.remove('hidden');
-            return;
+            const email = document.getElementById('login-email').value.trim();
+            const pass = document.getElementById('login-pass').value;
+            const erroEl = document.getElementById('login-erro');
+            erroEl.classList.add('hidden');
+            const btn = document.getElementById('btn-login');
+            btn.disabled = true; btn.innerText = 'A entrar...';
+            const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+            btn.disabled = false; btn.innerText = 'ENTRAR';
+            if (error) {
+                erroEl.innerText = 'Email ou password incorretos.';
+                erroEl.classList.remove('hidden');
+                return;
+            }
+            verificarSessao();
         }
-        
-        verificarSessao();
-    } catch (err) {
-        // Se houver um erro de ligação ou exceção, o botão volta ao normal
-        btn.disabled = false; 
-        btn.innerText = 'ENTRAR';
-        erroEl.innerText = 'Ocorreu um erro inesperado. Tenta novamente.';
-        erroEl.classList.remove('hidden');
-    }
-}
         async function fazerLogout() {
             await sb.auth.signOut();
             mudarView('view-login');
@@ -300,6 +298,238 @@
             msgEl.innerText = 'Guardado com sucesso.';
             await carregarEncomendas();
             setTimeout(() => document.getElementById('modal-detalhe').classList.add('hidden'), 700);
+        }
+
+        /* =========================================================
+           PRODUTOS
+           ========================================================= */
+        let produtosAdmin = [];
+        let produtosCarregados = false;
+        let fotosFormAtual = [];       // fotos do produto que está a ser criado/editado
+        let camposFormAtual = [];      // campos de personalização do produto que está a ser criado/editado
+
+        function mudarAba(aba) {
+            document.getElementById('aba-encomendas').classList.toggle('active', aba === 'encomendas');
+            document.getElementById('aba-produtos').classList.toggle('active', aba === 'produtos');
+            document.getElementById('painel-encomendas').classList.toggle('hidden', aba !== 'encomendas');
+            document.getElementById('painel-produtos').classList.toggle('hidden', aba !== 'produtos');
+            if (aba === 'produtos' && !produtosCarregados) carregarProdutos();
+        }
+
+        async function carregarProdutos() {
+            const cont = document.getElementById('lista-produtos');
+            cont.innerHTML = `<p class="text-gray-500 text-xs text-center py-8">A carregar...</p>`;
+            const { data, error } = await sb.from('products').select('*').order('ordem', { ascending: true });
+            if (error) {
+                cont.innerHTML = `<p class="text-red-400 text-xs text-center py-8">Erro ao carregar produtos: ${error.message}</p>`;
+                return;
+            }
+            produtosAdmin = data || [];
+            produtosCarregados = true;
+            renderizarProdutos();
+        }
+
+        function renderizarProdutos() {
+            const cont = document.getElementById('lista-produtos');
+            if (produtosAdmin.length === 0) {
+                cont.innerHTML = `<p class="text-gray-500 text-xs text-center py-12">Ainda não tens produtos. Clica em "+ Novo produto" para criares o primeiro.</p>`;
+                return;
+            }
+            cont.innerHTML = produtosAdmin.map(p => `
+                <div class="card rounded-xl p-4 flex items-center gap-4">
+                    <img src="${(p.fotos && p.fotos[0]) || ''}" class="w-14 h-14 rounded-lg object-cover bg-black/40 shrink-0" onerror="this.style.opacity=0">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="font-bold text-white text-sm truncate">${p.nome}</span>
+                            ${!p.ativo ? '<span class="status-pill" style="background:rgba(107,114,128,.15);color:#9ca3af;">Oculto</span>' : ''}
+                        </div>
+                        <p class="text-gray-500 text-xs truncate">${p.categoria} · ${Number(p.preco).toFixed(2)}€</p>
+                    </div>
+                    <div class="flex gap-2 shrink-0">
+                        <button onclick="abrirFormProduto('${p.id}')" class="text-xs bg-white/5 border border-white/10 px-3 py-2 rounded-full hover:bg-white/10 transition">EDITAR</button>
+                        <button onclick="apagarProduto('${p.id}')" class="text-xs bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-full hover:bg-red-500/20 transition">APAGAR</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function abrirFormProduto(id) {
+            const p = id ? produtosAdmin.find(x => x.id === id) : null;
+            fotosFormAtual = p ? [...(p.fotos || [])] : [];
+            camposFormAtual = p ? JSON.parse(JSON.stringify(p.personalizacao || [])) : [];
+
+            document.getElementById('modal-produto').classList.remove('hidden');
+            document.getElementById('modal-produto-content').innerHTML = `
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-lg font-bold text-white display">${p ? 'EDITAR PRODUTO' : 'NOVO PRODUTO'}</h3>
+                    <button onclick="document.getElementById('modal-produto').classList.add('hidden')" class="text-white font-bold text-xl">X</button>
+                </div>
+                <input type="hidden" id="produto-id" value="${p ? p.id : ''}">
+
+                <label class="text-xs font-bold text-gray-400 mb-1 block">Nome *</label>
+                <input id="produto-nome" type="text" value="${p ? p.nome.replace(/"/g,'&quot;') : ''}" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">
+
+                <label class="text-xs font-bold text-gray-400 mb-1 block">Descrição</label>
+                <textarea id="produto-desc" rows="3" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">${p ? p.descricao : ''}</textarea>
+
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                        <label class="text-xs font-bold text-gray-400 mb-1 block">Preço (€) *</label>
+                        <input id="produto-preco" type="number" step="0.01" min="0" value="${p ? p.preco : ''}" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl text-white text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-400 mb-1 block">Categoria *</label>
+                        <input id="produto-categoria" type="text" value="${p ? p.categoria.replace(/"/g,'&quot;') : ''}" placeholder="ex: Decoração & Presentes" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl text-white text-sm">
+                    </div>
+                </div>
+
+                <label class="flex items-center gap-2 mb-5 text-xs text-gray-400 cursor-pointer">
+                    <input id="produto-ativo" type="checkbox" ${!p || p.ativo ? 'checked' : ''}>
+                    <span>Visível no catálogo</span>
+                </label>
+
+                <label class="text-xs font-bold text-gray-400 mb-2 block">Fotos</label>
+                <div id="produto-fotos-grid" class="grid grid-cols-4 gap-2 mb-2"></div>
+                <input id="produto-foto-input" type="file" accept="image/*" multiple class="hidden" onchange="uploadFotosProduto(this.files)">
+                <button type="button" onclick="document.getElementById('produto-foto-input').click()" id="btn-upload-foto" class="w-full text-xs bg-white/5 border border-dashed border-white/20 py-3 rounded-xl hover:bg-white/10 transition mb-5">+ CARREGAR FOTOS</button>
+
+                <label class="text-xs font-bold text-gray-400 mb-2 block">Campos de personalização</label>
+                <div id="produto-campos-lista" class="flex flex-col gap-2 mb-2"></div>
+                <button type="button" onclick="adicionarCampoPersonalizacao()" class="w-full text-xs bg-white/5 border border-dashed border-white/20 py-3 rounded-xl hover:bg-white/10 transition mb-5">+ ADICIONAR CAMPO</button>
+
+                <div id="produto-msg" class="hidden text-xs mb-3"></div>
+
+                <button id="btn-guardar-produto" onclick="guardarProduto()" class="w-full bg-white text-black py-3 font-bold rounded-xl hover:bg-gray-200 transition text-sm">GUARDAR PRODUTO</button>
+            `;
+            renderizarFotosForm();
+            renderizarCamposForm();
+        }
+
+        function renderizarFotosForm() {
+            document.getElementById('produto-fotos-grid').innerHTML = fotosFormAtual.map((url, i) => `
+                <div class="relative aspect-square rounded-lg overflow-hidden bg-black/40">
+                    <img src="${url}" class="w-full h-full object-cover">
+                    <button type="button" onclick="removerFotoForm(${i})" class="absolute top-1 right-1 bg-black/70 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">X</button>
+                </div>
+            `).join('');
+        }
+        function removerFotoForm(i) {
+            fotosFormAtual.splice(i, 1);
+            renderizarFotosForm();
+        }
+
+        async function uploadFotosProduto(files) {
+            if (!files || files.length === 0) return;
+            const btn = document.getElementById('btn-upload-foto');
+            btn.disabled = true;
+            btn.innerText = 'A carregar...';
+            for (const file of files) {
+                try {
+                    const nomeUnico = `${Date.now()}-${Math.random().toString(36).slice(2)}-${file.name}`.replace(/\s+/g, '_');
+                    const { error } = await sb.storage.from('product-photos').upload(nomeUnico, file);
+                    if (error) throw error;
+                    const { data: urlData } = sb.storage.from('product-photos').getPublicUrl(nomeUnico);
+                    fotosFormAtual.push(urlData.publicUrl);
+                } catch (err) {
+                    console.error(err);
+                    alert('Erro ao carregar uma das fotos: ' + err.message);
+                }
+            }
+            btn.disabled = false;
+            btn.innerText = '+ CARREGAR FOTOS';
+            document.getElementById('produto-foto-input').value = '';
+            renderizarFotosForm();
+        }
+
+        function renderizarCamposForm() {
+            document.getElementById('produto-campos-lista').innerHTML = camposFormAtual.map((c, i) => `
+                <div class="bg-[#0a0a0a] border border-white/10 rounded-xl p-3">
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" value="${(c.label||'').replace(/"/g,'&quot;')}" placeholder="Nome do campo (ex: Cor)" oninput="camposFormAtual[${i}].label=this.value" class="flex-1 p-2 bg-black/40 border border-white/10 rounded-lg text-white text-xs">
+                        <select onchange="mudarTipoCampo(${i}, this.value)" class="p-2 bg-black/40 border border-white/10 rounded-lg text-white text-xs">
+                            <option value="texto" ${c.tipo !== 'select' ? 'selected' : ''}>Texto livre</option>
+                            <option value="select" ${c.tipo === 'select' ? 'selected' : ''}>Lista de opções</option>
+                        </select>
+                        <button type="button" onclick="removerCampoPersonalizacao(${i})" class="text-red-400 text-xs px-2">X</button>
+                    </div>
+                    ${c.tipo === 'select' ? `
+                        <input type="text" value="${(c.opcoes||[]).join(', ')}" placeholder="Opções separadas por vírgula (ex: Dourado, Prateado)" oninput="camposFormAtual[${i}].opcoes=this.value.split(',').map(s=>s.trim()).filter(Boolean)" class="w-full p-2 bg-black/40 border border-white/10 rounded-lg text-white text-xs">
+                    ` : `
+                        <input type="text" value="${(c.placeholder||'').replace(/"/g,'&quot;')}" placeholder="Texto de exemplo (ex: João, nº 7)" oninput="camposFormAtual[${i}].placeholder=this.value" class="w-full p-2 bg-black/40 border border-white/10 rounded-lg text-white text-xs">
+                    `}
+                </div>
+            `).join('');
+        }
+        function adicionarCampoPersonalizacao() {
+            camposFormAtual.push({ label: '', placeholder: '' });
+            renderizarCamposForm();
+        }
+        function removerCampoPersonalizacao(i) {
+            camposFormAtual.splice(i, 1);
+            renderizarCamposForm();
+        }
+        function mudarTipoCampo(i, tipo) {
+            if (tipo === 'select') {
+                camposFormAtual[i] = { label: camposFormAtual[i].label || '', tipo: 'select', opcoes: [] };
+            } else {
+                camposFormAtual[i] = { label: camposFormAtual[i].label || '', placeholder: '' };
+            }
+            renderizarCamposForm();
+        }
+
+        async function guardarProduto() {
+            const id = document.getElementById('produto-id').value;
+            const nome = document.getElementById('produto-nome').value.trim();
+            const descricao = document.getElementById('produto-desc').value.trim();
+            const preco = parseFloat(document.getElementById('produto-preco').value);
+            const categoria = document.getElementById('produto-categoria').value.trim();
+            const ativo = document.getElementById('produto-ativo').checked;
+            const msgEl = document.getElementById('produto-msg');
+            msgEl.classList.add('hidden');
+
+            if (nome.length < 2) return mostrarMsgProduto('Indica o nome do produto.');
+            if (isNaN(preco) || preco < 0) return mostrarMsgProduto('Indica um preço válido.');
+            if (categoria.length < 2) return mostrarMsgProduto('Indica a categoria do produto.');
+            if (fotosFormAtual.length === 0) return mostrarMsgProduto('Adiciona pelo menos uma foto.');
+
+            const camposValidos = camposFormAtual.filter(c => c.label && c.label.trim());
+
+            const payload = {
+                nome, descricao, preco, categoria, ativo,
+                fotos: fotosFormAtual,
+                personalizacao: camposValidos
+            };
+
+            const btn = document.getElementById('btn-guardar-produto');
+            btn.disabled = true; btn.innerText = 'A guardar...';
+
+            let error;
+            if (id) {
+                ({ error } = await sb.from('products').update(payload).eq('id', id));
+            } else {
+                payload.ordem = produtosAdmin.length;
+                ({ error } = await sb.from('products').insert(payload));
+            }
+
+            btn.disabled = false; btn.innerText = 'GUARDAR PRODUTO';
+
+            if (error) return mostrarMsgProduto('Erro ao guardar: ' + error.message);
+
+            document.getElementById('modal-produto').classList.add('hidden');
+            await carregarProdutos();
+        }
+        function mostrarMsgProduto(texto) {
+            const msgEl = document.getElementById('produto-msg');
+            msgEl.className = 'text-xs mb-3 text-red-400';
+            msgEl.innerText = texto;
+            msgEl.classList.remove('hidden');
+        }
+
+        async function apagarProduto(id) {
+            if (!confirm('Tens a certeza que queres apagar este produto? Esta ação não pode ser desfeita.')) return;
+            const { error } = await sb.from('products').delete().eq('id', id);
+            if (error) { alert('Erro ao apagar: ' + error.message); return; }
+            await carregarProdutos();
         }
 
         verificarSessao();

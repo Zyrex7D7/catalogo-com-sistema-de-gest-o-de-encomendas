@@ -17,7 +17,9 @@ Tempo estimado: 20-30 minutos, sem precisares de saber programar.
 3. Espera 1-2 minutos até o projeto ficar pronto.
 4. No menu lateral, vai a **SQL Editor** → **New query**.
 5. Abre o ficheiro `supabase-schema.sql` (incluído nesta pasta), copia **todo** o conteúdo, cola no editor e clica **Run**.
-   - Isto cria a tabela de encomendas e as regras de segurança automaticamente.
+   - Isto cria a tabela de encomendas, a tabela de produtos, o espaço de armazenamento das fotos e as regras de segurança automaticamente.
+   - Também semeia (insere) os produtos que já tinhas no catálogo, para não perderes nada.
+   - Se já tinhas corrido uma versão anterior deste script (só com a tabela `orders`), podes correr este de novo sem problema — as partes já criadas são substituídas (`create or replace`) e só a tabela `products` é nova.
 6. Vai a **Project Settings** (ícone de engrenagem) → **API**.
    - Copia o **Project URL** → cola em `config.js` no campo `SUPABASE_URL`.
    - Copia a chave **anon public** → cola em `config.js` no campo `SUPABASE_ANON_KEY`.
@@ -94,12 +96,15 @@ Se preferires GitHub Pages, funciona da mesma forma — basta enviar estes fiche
 
 ## 5. Como usar no dia a dia
 
-- **Clientes:** escolhem produtos → carrinho → dados → recebem código por email → confirmam → recebem o nº de encomenda. Podem consultar o estado a qualquer momento em "A minha encomenda" no site.
-- **Tu (dono):** abre `admin.html`, entra com o teu login, vês todas as encomendas por estado (Aguarda confirmação, Confirmada, Em produção, Pronta, Entregue, Cancelada). Clicas numa encomenda para ver os detalhes completos e mudar o estado.
+- **Clientes:** escolhem produtos → carrinho → dados (nome, email, telemóvel) → recebem código por email → confirmam → recebem o nº de encomenda. Em "A minha encomenda" veem todas as encomendas feitas com o seu email, e podem cancelar as que ainda estão a aguardar confirmação.
+- **Tu (dono):** abre `admin.html`, entra com o teu login.
+  - Na aba **Encomendas**, vês todas por estado (Aguarda confirmação, Confirmada, Em produção, Pronta, Entregue, Cancelada). Clicas numa para ver os detalhes e mudar o estado.
+  - Na aba **Produtos**, crias, editas ou apagas os produtos do catálogo — nome, descrição, preço, categoria, fotos (carregadas diretamente, sem mexer em pastas) e os campos de personalização (ex: cor, nome). O catálogo do site atualiza-se sozinho a partir daqui.
 
 ### Sobre a prevenção de erros já incluída
-- O cliente tem de **rever o resumo da encomenda e marcar uma confirmação** antes de submeter.
+- O cliente tem de indicar nome, email e **telemóvel** (agora obrigatório) e marcar uma confirmação antes de submeter.
 - O código de confirmação por email garante que o email pertence mesmo ao cliente e que ele reviu os dados uma segunda vez.
+- O cliente pode cancelar a própria encomenda enquanto ela ainda estiver "a aguardar confirmação", em "A minha encomenda".
 - Deteção automática de **encomendas repetidas** (bloqueia mais de 3 encomendas do mesmo email em 10 minutos).
 - Código expira em 15 minutos e tem limite de tentativas erradas, para evitar abuso.
 - Se a base de dados estiver em baixo ou mal configurada, o site **não bloqueia o cliente** — volta automaticamente ao envio direto por WhatsApp.

@@ -161,18 +161,17 @@
         <div id="modal-content" class="bg-[#121212] p-8 rounded-2xl max-w-lg w-full border border-white/10 modal-scroll text-sm"></div>
     </div>
 
-    
-    <!-- Modal: consultar histórico de encomendas -->
+    <!-- Modal: consultar estado da encomenda -->
     <div id="modal-estado" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
         <div class="bg-[#121212] p-8 rounded-2xl max-w-md w-full border border-white/10 text-sm">
             <div class="flex justify-between items-start mb-4">
-                <h3 class="text-lg font-bold text-white display">AS MINHAS ENCOMENDAS</h3>
+                <h3 class="text-lg font-bold text-white display">CONSULTAR ENCOMENDA</h3>
                 <button onclick="document.getElementById('modal-estado').classList.add('hidden')" class="text-white font-bold text-xl">X</button>
             </div>
-            <p class="text-gray-400 text-xs mb-4">Introduz o teu email para veres o teu histórico e confirmares encomendas pendentes.</p>
+            <p class="text-gray-400 text-xs mb-4">Introduz o email que usaste para veres todas as tuas encomendas.</p>
             <input id="estado-email" type="email" placeholder="O teu email" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">
-            <button onclick="consultarEstadoEncomenda()" class="w-full bg-white text-black py-3 rounded-xl font-bold hover:bg-gray-200 transition text-sm">VER ENCOMENDAS</button>
-            <div id="estado-resultado" class="mt-4"></div>
+            <button onclick="consultarEstadoEncomenda()" class="w-full bg-white text-black py-3 rounded-xl font-bold hover:bg-gray-200 transition text-sm">CONSULTAR</button>
+            <div id="estado-resultado" class="mt-4 flex flex-col gap-3"></div>
         </div>
     </div>
 
@@ -235,29 +234,48 @@
         <div id="carrinho-conteudo" class="p-8 bg-[#121212] rounded-2xl border border-white/10"></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        const produtos = [
-            { id: 1, nome: "Secador de Capacetes #CSC", preco: 95, categoria: "Auto & SimRacing", pasta: "Secador de Capacetes CSC", fotos: ["ssc1.png","ssc2.png","ssc3.png","ssc4.png"], personalizacao: [ {label:"Cor dos pés", placeholder:"ex: preto"}, {label:"Cor da base", placeholder:"ex: preto"}, {label:"Personalização (nome e/ou número)", placeholder:"ex: João, nº 7"} ], desc: "Secador de capacetes e luvas composto por 3 ventoinhas (uma de 120mm p/ capacete e duas de 60mm p/ luvas). Inclui botão de ligar/desligar e cabo de alimentação. Pode ser personalizada a cor do stand, número e nome. Tempo de entrega: 2 semanas." },
-            { id: 15, nome: "Secador de Capacetes e Luvas", preco: 95, categoria: "Auto & SimRacing", pasta: "Secador de Capacete e Luvas", fotos: ["scl1.png","scl2.png","scl3.png","scl4.png","scl5.png","scl6.png"], personalizacao: [ {label:"Cor dos pés", placeholder:"ex: preto"}, {label:"Cor da base", placeholder:"ex: preto"}, {label:"Personalização (nome e/ou número)", placeholder:"ex: João, nº 7"} ], desc: "Secador de capacetes e luvas.<br><br>Composto com 3 ventoinhas, uma de 120mm para secar o capacete e duas de 60mm para secar as luvas.<br>Inclui também um botão para ligar e desligar as ventoinhas e o respetivo cabo de alimentação.<br><br>Pode ser escolhida a cor só stand (pés e base) e pode ser incluída uma personalização, por exemplo com número e nome.<br><br>Valor sem personalização: 85€<br>Valor com personalização: 95€<br><br>Tempo previsto desde a encomenda à entrega: duas semanas." },
-            { id: 2, nome: "Indicador SimRacing (RPM/Bandeiras)", preco: 30, categoria: "Auto & SimRacing", pasta: "Indicador de mudança bandeiras rpm Simracig", fotos: ["sim1.png","sim2.png","sim3.png","sim4.png"], personalizacao: [], desc: "Indicador de mudança, bandeiras e rotação (RPM).<br><br><strong>Compatibilidade:</strong> Assetto Corsa e Competizione, iRacing, rFactor 2, Project CARS 1 e 2, Automobilista 1 e 2, F1 Series (2020-24), Dirt Rally 1 e 2.0, Euro Truck/American Truck Sim, RaceRoom, BeamNG.drive, Forza Horizon 4 e 5, Gran Turismo 7, Live for Speed, WRC, KartKraft.<br><br><strong>Detalhes:</strong> Ligação Micro USB. Cores dos LEDs totalmente personalizáveis." },
-            { id: 3, nome: "Bola de Natal - Cão", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Cão", fotos: ["au.png","auau.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Rex"}, {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de natal em forma de patinha. Disponível versão com asinhas para homenagem. Personalizada com nome. Diâmetro: 8cm. Escolha a cor da fita." },
-            { id: 4, nome: "Bola de Natal - Gato", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Gato", fotos: ["miau.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Mimi"}, {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de natal em forma de cabeça de gatinho. Disponível com asinhas. Personalizada com nome. Diâmetro: 8cm. Escolha a cor da fita." },
-            { id: 5, nome: "Bola de Natal - Melhor Auxiliar", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Melhor Auxiliar", fotos: ["aux1.png","aux2.png"], personalizacao: [ {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de natal para mimar os auxiliares. Personalizada com nome. Diâmetro: 8cm. Escolha a cor da fita." },
-            { id: 6, nome: "Bola de Natal - Professor(a)", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Melhor Professor(a)", fotos: ["prof1.png","prof2.png"], personalizacao: [ {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de natal para mimar os professores(as). Diâmetro: 8cm. Escolha a cor da fita." },
-            { id: 7, nome: "Bola de Natal - Educador(a)", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal - Melhor Educador(a)", fotos: ["educa1.png","educa2.png"], personalizacao: [ {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de Natal para o mimar os(as) Educadores(as) ! 🤍Escolha também a cor da fita para melhor condizer com a sua árvore de natal!Diametro de 8cm." },
-            { id: 8, nome: "Bola de Natal - Boas Festas", preco: 2.5, categoria: "Natal", pasta: "Bola Feliz Natal Boas Festas", fotos: ["festa1.png","festa2.png"], personalizacao: [ {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de Natal para quem não pode passar sem oferecer uma lembrança! 🤍Escolha também a cor da fita para melhor condizer com a sua árvore de natal!Diametro de 8cm." },
-            { id: 16, nome: "Bola de Natal Personalizada", preco: 2.5, categoria: "Natal", pasta: "Bola de Natal Personalizada", fotos: ["personal.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Solange"}, {label:"Com asinhas (para homenagem)", tipo:"select", opcoes:["Sim","Não"]}, {label:"Cor do topo e base", tipo:"select", opcoes:["Dourado","Cinzento","Vermelho"]} ], desc: "Bola de Natal personalizada.<br><br>Também disponível versão com asinhas para homenagear os entes queridos 🤍<br><br>Personalizada com um nome à escolha.<br>Escolha também a cor da fita para melhor condizer com a sua árvore de natal!<br><br>Diâmetro de 8cm." },
-            { id: 9, nome: "Bola com Fotografia", preco: 10, categoria: "Natal", pasta: "Bola com Fotografia", fotos: ["ft1.png","ft2.png","ft3.png"], personalizacao: [ {label:"Detalhes da fotografia (envia a foto depois por WhatsApp)", placeholder:"ex: foto de família de Natal"} ], desc: "Bola personalizada com fotografia à sua escolha. Iluminada através das luzes da sua árvore de Natal." },
-            { id: 10, nome: "Caixa de Memórias", preco: 35, categoria: "Decoração & Presentes", pasta: "Caixa de memórias", fotos: ["1.png","2.png"], personalizacao: [ {label:"Cor da armação", placeholder:"ex: natural"}, {label:"Detalhes das fotografias (até 3, envia depois por WhatsApp)", placeholder:"ex: fotos de família"} ], desc: "Caixa de memórias que leva até 3 fotografias. É possível escolher a cor da armação." },
-            { id: 11, nome: "Nome Infinito", preco: 15, categoria: "Decoração & Presentes", pasta: "Nome infinito", fotos: ["nome_infinito.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Marta & João"}, {label:"Cor", placeholder:"ex: dourado"} ], desc: "Peça decorativa personalizável com nomes. Várias cores disponíveis." },
-            { id: 12, nome: "Base Monstera", preco: 10, categoria: "Decoração & Presentes", pasta: "Base coposvelas monsteras", fotos: ["base.png"], personalizacao: [ {label:"Cor", placeholder:"ex: verde"} ], desc: "Conjunto composto por 4 folhas de monstera com base. Dimensão folha: 8cm x 10cm x 0,4cm. Dimensão base: 8,5cm x 10,5cm x 2,2cm." },
-            { id: 13, nome: "Vaso Caveira", preco: 12, categoria: "Decoração & Presentes", pasta: "Caveiras vaso", fotos: ["cav1.png","cav2.png"], personalizacao: [ {label:"Cor", placeholder:"ex: preto"} ], desc: "Vaso decorativo para plantas ou para guardar chaves. Disponível em várias cores." },
-            { id: 14, nome: "Luminária NameLed", preco: 30, categoria: "Decoração & Presentes", pasta: "NameLed", fotos: ["nl1.png","nl2.png"], personalizacao: [ {label:"Nome", placeholder:"ex: Beatriz"}, {label:"Cor(es) LED", placeholder:"ex: azul e branco"} ], desc: "Luminária personalizada com iluminação LED controlável com comando remoto. Permite até quatro cores diferentes. Dimensão máxima: 25cm x 25cm." }
-        ];
+        // O catálogo vive agora na tabela `products` do Supabase — gerido a
+        // partir do admin.html (aba "Produtos"). Já não é preciso editar
+        // este ficheiro para acrescentar, mudar ou remover produtos.
+        let produtos = [];
 
-        function caminhoFoto(produto, nomeFicheiro) {
-            if (!produto.pasta) return nomeFicheiro;
-            return encodeURIComponent(produto.pasta) + '/' + encodeURIComponent(nomeFicheiro);
+        if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY) {
+            document.getElementById('grid-produtos').innerHTML = `
+                <div class="empty-state text-center text-gray-500 text-sm py-16">
+                    O catálogo ainda não está disponível.<br>
+                    Falta configurar o Supabase em <code class="text-orange-500">config.js</code> (vê o guia CONFIGURACAO.md).
+                </div>`;
+        }
+
+        const sbCatalogo = (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY)
+            ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
+            : null;
+
+        async function carregarProdutosCatalogo() {
+            if (!sbCatalogo) return;
+            const grid = document.getElementById('grid-produtos');
+            grid.innerHTML = `<p class="text-gray-500 text-xs text-center py-12">A carregar produtos...</p>`;
+            const { data, error } = await sbCatalogo
+                .from('products')
+                .select('*')
+                .eq('ativo', true)
+                .order('ordem', { ascending: true });
+            if (error) {
+                grid.innerHTML = `<div class="empty-state text-center text-gray-500 text-sm py-16">Não foi possível carregar o catálogo. Tenta novamente mais tarde.</div>`;
+                console.error(error);
+                return;
+            }
+            produtos = data || [];
+            renderizarCategorias();
+            renderizarGrid();
+        }
+
+        // Foto vem já pronta a usar (caminho relativo às pastas do site, ou
+        // um URL do Supabase Storage quando é carregada pelo admin).
+        function caminhoFoto(produto, foto) {
+            return foto;
         }
 
         let carrinho = [];
@@ -297,7 +315,7 @@
 
             const filtrados = produtos.filter(p => {
                 const passaCategoria = categoriaAtiva === "Todos" || p.categoria === categoriaAtiva;
-                const passaPesquisa = !termo || p.nome.toLowerCase().includes(termo) || p.desc.toLowerCase().includes(termo);
+                const passaPesquisa = !termo || p.nome.toLowerCase().includes(termo) || (p.descricao || '').toLowerCase().includes(termo);
                 return passaCategoria && passaPesquisa;
             });
 
@@ -307,15 +325,15 @@
             }
 
             grid.innerHTML = filtrados.map(p => `
-                <div class="card-produto flex items-center gap-4 bg-[#111111] p-4 rounded-xl border border-white/5 cursor-pointer" onclick="abrirDescricao(${p.id})">
+                <div class="card-produto flex items-center gap-4 bg-[#111111] p-4 rounded-xl border border-white/5 cursor-pointer" onclick="abrirDescricao('${p.id}')">
                     <div class="w-16 h-16 rounded-lg overflow-hidden shrink-0">
                         <img src="${caminhoFoto(p, p.fotos[0])}" class="w-full h-full object-cover">
                     </div>
                     <div class="flex-grow min-w-0">
                         <h3 class="font-bold text-sm text-white truncate">${p.nome}</h3>
-                        <p class="text-orange-500 font-bold text-xs">${p.preco.toFixed(2)}€</p>
+                        <p class="text-orange-500 font-bold text-xs">${Number(p.preco).toFixed(2)}€</p>
                     </div>
-                    <button onclick="event.stopPropagation(); abrirDescricao(${p.id})" class="shrink-0 text-[10px] bg-white/5 px-4 py-2 rounded-lg border border-white/10 hover:bg-white hover:text-black transition">DETALHES</button>
+                    <button onclick="event.stopPropagation(); abrirDescricao('${p.id}')" class="shrink-0 text-[10px] bg-white/5 px-4 py-2 rounded-lg border border-white/10 hover:bg-white hover:text-black transition">DETALHES</button>
                 </div>
             `).join('');
         }
@@ -353,7 +371,7 @@
                 </div>
 
                 <h3 class="text-xl font-bold mb-2 text-white display">${p.nome}</h3>
-                <p class="text-gray-400 text-sm mb-6 leading-relaxed">${p.desc}</p>
+                <p class="text-gray-400 text-sm mb-6 leading-relaxed">${p.descricao || ''}</p>
 
                 <div class="flex items-center justify-between mb-4 bg-[#0a0a0a] rounded-xl p-3 border border-white/10">
                     <span class="text-sm font-bold text-gray-300">Quantidade</span>
@@ -380,7 +398,7 @@
                 </div>
                 ` : ''}
 
-                <button onclick="adicionar(${p.id})" class="w-full bg-white text-black py-4 rounded-xl font-bold hover:bg-gray-200 transition">ADICIONAR AO CARRINHO</button>
+                <button onclick="adicionar('${p.id}')" class="w-full bg-white text-black py-4 rounded-xl font-bold hover:bg-gray-200 transition">ADICIONAR AO CARRINHO</button>
             `;
 
             quantidadeAtual = 1;
@@ -547,8 +565,8 @@
                 <input id="input-email" type="email" placeholder="ex: nome@email.com" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-4 text-white text-sm">
                 <p class="text-[11px] text-gray-500 -mt-3 mb-4">Vamos enviar-te um código de confirmação para este email.</p>
 
-                <label class="text-xs font-bold text-gray-400 mb-1 block">Telemóvel </label>
-                <input id="input-telefone" type="tel" placeholder="ex: 912 345 678" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-5 text-white text-sm">
+                <label class="text-xs font-bold text-gray-400 mb-1 block">Telemóvel (opcional)</label>
+                <input id="input-telefone" type="tel" placeholder="Telemóvel *" class="w-full p-3 bg-[#0a0a0a] border border-white/10 rounded-xl mb-5 text-white text-sm">
 
                 <div class="bg-[#0a0a0a] rounded-xl p-4 border border-white/10 mb-5">
                     <p class="text-xs font-bold text-gray-300 mb-2">Resumo</p>
@@ -585,9 +603,9 @@
             const termos = document.getElementById('input-termos').checked;
             document.getElementById('banner-erro-dados').innerHTML = '';
 
-            if (telefone.length < 9) return mostrarErro('banner-erro-dados', 'Indica o teu número de telemóvel para podermos contactar.');
             if (nome.length < 2) return mostrarErro('banner-erro-dados', 'Indica o teu nome completo.');
             if (!validarEmail(email)) return mostrarErro('banner-erro-dados', 'Introduz um email válido — é para lá que enviamos o código de confirmação.');
+            if (telefone.replace(/\D/g, '').length < 9) return mostrarErro('banner-erro-dados', 'Indica um número de telemóvel válido — é assim que confirmamos contigo detalhes da encomenda.');
             if (!termos) return mostrarErro('banner-erro-dados', 'Confirma que reviste os itens da encomenda antes de continuares.');
 
             const total = carrinho.reduce((sum, i) => sum + i.preco * i.qtd, 0);
@@ -796,7 +814,6 @@
         /* --- Consulta de estado da encomenda --- */
         function abrirModalEstado() {
             document.getElementById('estado-resultado').innerHTML = '';
-            // Já não tentamos limpar o 'estado-numero' porque ele foi apagado
             document.getElementById('estado-email').value = '';
             document.getElementById('modal-estado').classList.remove('hidden');
         }
@@ -812,142 +829,55 @@
         async function consultarEstadoEncomenda() {
             const email = document.getElementById('estado-email').value.trim();
             const res = document.getElementById('estado-resultado');
-            
             res.innerHTML = '';
-            
-            if (!validarEmail(email)) { 
-                res.innerHTML = `<p class="text-red-400 text-xs">Preenche um email válido.</p>`; 
-                return; 
-            }
-            if (!supabaseAtivo()) { 
-                res.innerHTML = `<p class="text-gray-400 text-xs">Consulta automática indisponível. Contacta-nos por WhatsApp.</p>`; 
-                return; 
-            }
-            
-            res.innerHTML = `<p class="text-gray-400 text-xs">A procurar as tuas encomendas...</p>`;
-            
+            if (!validarEmail(email)) { res.innerHTML = `<p class="text-red-400 text-xs">Introduz um email válido.</p>`; return; }
+            if (!supabaseAtivo()) { res.innerHTML = `<p class="text-gray-400 text-xs">Consulta automática indisponível. Contacta-nos por WhatsApp.</p>`; return; }
+            res.innerHTML = `<p class="text-gray-400 text-xs">A consultar...</p>`;
             try {
                 const sb = getSupabase();
                 const { data, error } = await sb.rpc('get_customer_orders', { p_email: email });
-                
                 if (error) throw error;
-                
-                if (!data || data.length === 0) { 
-                    res.innerHTML = `<p class="text-red-400 text-xs">Não encontrámos nenhuma encomenda para este email.</p>`; 
-                    return; 
-                }
-                
-                let htmlFinal = '';
-                
-                data.forEach(row => {
+                if (!data || data.length === 0) { res.innerHTML = `<p class="text-red-400 text-xs">Não encontrámos nenhuma encomenda com esse email.</p>`; return; }
+                res.innerHTML = data.map(row => {
                     const [titulo, desc] = ESTADO_LABELS[row.status] || ['—', ''];
-                    
-                    let itensHtml = '';
-                    if (row.items && row.items.length > 0) {
-                        itensHtml = row.items.map(i => `<p class="text-xs text-gray-400 mb-1">${i.nome} x${i.qtd}${i.obs ? ' <span class="text-orange-500">(' + i.obs + ')</span>' : ''}</p>`).join('');
-                    }
-
-                    // Botões de Confirmar e Cancelar se estiver pendente
-                    let acaoHtml = '';
-                    if (row.status === 'pending_confirmation' && row.confirmation_code) {
-                        acaoHtml = `
-                            <div class="mt-3 p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl text-center">
-                                <p class="text-orange-500 text-[11px] mb-2">Aguarda confirmação (Código: <b>${row.confirmation_code}</b>)</p>
-                                <div class="flex gap-2 mt-2">
-                                    <button onclick="confirmarDireto('${row.order_number}', '${row.confirmation_code}')" class="flex-1 bg-orange-500 text-black py-2 font-bold rounded-lg text-xs hover:bg-orange-600 transition">
-                                        CONFIRMAR
-                                    </button>
-                                    <button onclick="cancelarDireto('${row.order_number}', '${email}')" class="flex-1 bg-red-500/10 border border-red-500/30 text-red-400 py-2 font-bold rounded-lg text-xs hover:bg-red-500/20 transition">
-                                        CANCELAR
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }
-
-                    htmlFinal += `
-                        <div class="bg-[#0a0a0a] border border-white/10 rounded-xl p-4 mb-3">
-                            <div class="flex justify-between items-start mb-2">
-                                <p class="font-bold text-white">${row.order_number}</p>
-                                <span class="text-[10px] text-gray-500">${new Date(row.created_at).toLocaleDateString('pt-PT')}</span>
-                            </div>
-                            <p class="font-bold text-gray-300 text-xs mb-3">${titulo}</p>
-                            <div class="mb-3 border-t border-white/5 pt-2">
-                                ${itensHtml}
-                            </div>
-                            <p class="text-gray-500 text-[11px] font-bold">Total: ${Number(row.total).toFixed(2)}€</p>
-                            ${acaoHtml}
+                    const podeCancelar = row.status === 'pending_confirmation';
+                    return `
+                    <div class="bg-[#0a0a0a] border border-white/10 rounded-xl p-4">
+                        <div class="flex justify-between items-start mb-1">
+                            <p class="font-bold text-white text-xs">${row.order_number}</p>
+                            <p class="text-gray-500 text-[10px]">${new Date(row.created_at).toLocaleDateString('pt-PT')}</p>
                         </div>
-                    `;
-                });
-
-                res.innerHTML = `<div class="max-h-80 overflow-y-auto pr-1">${htmlFinal}</div>`;
-                
+                        <p class="font-bold text-white mb-1">${titulo}</p>
+                        <p class="text-gray-400 text-xs mb-2">${desc}</p>
+                        <p class="text-gray-500 text-[11px] mb-2">Total: ${Number(row.total).toFixed(2)}€</p>
+                        ${podeCancelar ? `<button onclick="cancelarEncomendaCliente('${row.order_number}', ${JSON.stringify(email)})" class="w-full text-[11px] bg-red-500/10 border border-red-500/30 text-red-400 py-2 rounded-lg hover:bg-red-500/20 transition">CANCELAR ENCOMENDA</button>` : ''}
+                    </div>`;
+                }).join('');
             } catch (err) {
                 console.error(err);
-                res.innerHTML = `<p class="text-red-400 text-xs">Erro ao consultar o histórico. Tenta novamente.</p>`;
+                res.innerHTML = `<p class="text-red-400 text-xs">Erro ao consultar. Tenta novamente.</p>`;
             }
         }
 
-        async function confirmarDireto(numero, codigo) {
-            const res = document.getElementById('estado-resultado');
-            res.innerHTML = `<p class="text-gray-400 text-xs">A confirmar a encomenda ${numero}...</p>`;
-            
+        async function cancelarEncomendaCliente(orderNumber, email) {
+            if (!confirm('Tens a certeza que queres cancelar esta encomenda?')) return;
             try {
                 const sb = getSupabase();
-                const { data, error } = await sb.rpc('confirm_order', { p_order_number: numero, p_code: codigo });
-                
+                const { data, error } = await sb.rpc('cancel_pending_order', { p_order_number: orderNumber, p_email: email });
                 if (error) throw error;
-                
-                if (data === 'ok') {
-                    consultarEstadoEncomenda(); 
-                } else if (data === 'expirado') {
-                    res.innerHTML = `<p class="text-red-400 text-xs mt-4">O código expirou. Contacta-nos por WhatsApp.</p>`;
-                } else {
-                    res.innerHTML = `<p class="text-red-400 text-xs mt-4">Erro ao confirmar (${data}). Tenta novamente.</p>`;
+                if (data !== 'ok') {
+                    alert('Não foi possível cancelar (a encomenda já pode ter sido confirmada ou processada).');
                 }
+                consultarEstadoEncomenda();
             } catch (err) {
                 console.error(err);
-                res.innerHTML = `<p class="text-red-400 text-xs mt-4">Erro de ligação. Tenta novamente.</p>`;
-            }
-        }
-
-        // Nova função para cancelar a encomenda
-        async function cancelarDireto(numero, email) {
-            if (!confirm(`Tens a certeza que queres cancelar a encomenda ${numero}?`)) return;
-
-            const res = document.getElementById('estado-resultado');
-            res.innerHTML = `<p class="text-gray-400 text-xs">A cancelar a encomenda ${numero}...</p>`;
-            
-            try {
-                const sb = getSupabase();
-                const { data, error } = await sb.rpc('cancel_pending_order', { p_order_number: numero, p_email: email });
-                
-                if (error) throw error;
-                
-                if (data === 'ok') {
-                    consultarEstadoEncomenda(); // Recarrega a lista para mostrar o estado Cancelado (Vermelho)
-                } else {
-                    res.innerHTML = `<p class="text-red-400 text-xs mt-4">Erro ao cancelar (${data}). Tenta novamente.</p>`;
-                }
-            } catch (err) {
-                console.error(err);
-                res.innerHTML = `<p class="text-red-400 text-xs mt-4">Erro de ligação. Tenta novamente.</p>`;
+                alert('Erro ao cancelar. Tenta novamente.');
             }
         }
 
         if (CONFIG && CONFIG.NOME_LOJA) document.getElementById('footer-nome-loja').innerText = CONFIG.NOME_LOJA + ' — 3D Printing Lab';
 
-        renderizarCategorias();
-        renderizarGrid();
+        carregarProdutosCatalogo();
     </script>
-    
-    <button onclick="window.open('https://wa.me/' + (CONFIG.WHATSAPP_NUMERO || '').replace(/\D/g,''), '_blank')" 
-            class="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[100] flex items-center gap-2 bg-[#25D366] text-black px-4 py-2 sm:px-5 sm:py-3 rounded-full shadow-[0_0_15px_rgba(37,211,102,0.3)] hover:scale-105 hover:shadow-[0_0_20px_rgba(37,211,102,0.5)] transition-all duration-300">
-        <svg class="w-5 h-5 sm:w-6 sm:h-6 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.012c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/>
-        </svg>
-        <span class="text-[11px] sm:text-xs font-bold tracking-tight">Precisa de ajuda?</span>
-    </button>
 </body>
 </html>
