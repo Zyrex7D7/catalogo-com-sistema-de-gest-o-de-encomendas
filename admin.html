@@ -139,21 +139,46 @@
         }
 
         async function fazerLogin() {
-            const email = document.getElementById('login-email').value.trim();
-            const pass = document.getElementById('login-pass').value;
-            const erroEl = document.getElementById('login-erro');
-            erroEl.classList.add('hidden');
-            const btn = document.getElementById('btn-login');
-            btn.disabled = true; btn.innerText = 'A entrar...';
-            const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-            btn.disabled = false; btn.innerText = 'ENTRAR';
-            if (error) {
-                erroEl.innerText = 'Email ou password incorretos.';
-                erroEl.classList.remove('hidden');
-                return;
-            }
-            verificarSessao();
+    const email = document.getElementById('login-email').value.trim();
+    const pass = document.getElementById('login-pass').value;
+    const erroEl = document.getElementById('login-erro');
+    
+    // 1. Esconde mensagens de erro anteriores
+    erroEl.classList.add('hidden');
+    
+    // 2. Validação simples para evitar que o Supabase crashe com formatos inválidos
+    if (!email || !email.includes('@')) {
+        erroEl.innerText = 'Por favor, introduz um endereço de email válido.';
+        erroEl.classList.remove('hidden');
+        return;
+    }
+
+    const btn = document.getElementById('btn-login');
+    btn.disabled = true; 
+    btn.innerText = 'A entrar...';
+
+    // 3. Bloco try...catch para apanhar falhas de rede ou exceções
+    try {
+        const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+        
+        btn.disabled = false; 
+        btn.innerText = 'ENTRAR';
+        
+        if (error) {
+            erroEl.innerText = 'Email ou password incorretos.';
+            erroEl.classList.remove('hidden');
+            return;
         }
+        
+        verificarSessao();
+    } catch (err) {
+        // Se houver um erro de ligação ou exceção, o botão volta ao normal
+        btn.disabled = false; 
+        btn.innerText = 'ENTRAR';
+        erroEl.innerText = 'Ocorreu um erro inesperado. Tenta novamente.';
+        erroEl.classList.remove('hidden');
+    }
+}
         async function fazerLogout() {
             await sb.auth.signOut();
             mudarView('view-login');
