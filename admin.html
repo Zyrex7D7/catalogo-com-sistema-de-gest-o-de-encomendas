@@ -64,7 +64,8 @@
         </div>
 
         <div id="painel-encomendas">
-        <div class="flex justify-end mb-4">
+        <div class="flex justify-end gap-2 mb-4">
+            <button onclick="limparCanceladasExpiradas()" class="text-xs bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-full hover:bg-red-500/20 transition">🗑 LIMPAR CANCELADAS/EXPIRADAS</button>
             <button onclick="carregarEncomendas()" class="text-xs bg-white/5 border border-white/10 px-4 py-2 rounded-full hover:bg-white/10 transition">↻ ATUALIZAR</button>
         </div>
         <div id="stats" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"></div>
@@ -323,6 +324,15 @@
             msgEl.innerText = 'Guardado com sucesso.';
             await carregarEncomendas();
             setTimeout(() => document.getElementById('modal-detalhe').classList.add('hidden'), 700);
+        }
+
+        async function limparCanceladasExpiradas() {
+            const candidatas = encomendas.filter(e => e.status === 'cancelled' || e.status === 'expired');
+            if (candidatas.length === 0) { alert('Não há encomendas canceladas ou expiradas para apagar.'); return; }
+            if (!confirm(`Vais apagar ${candidatas.length} encomenda(s) cancelada(s)/expirada(s). Esta ação não pode ser desfeita. Continuar?`)) return;
+            const { error } = await sb.from('orders').delete().in('status', ['cancelled', 'expired']);
+            if (error) { alert('Erro ao apagar: ' + error.message); return; }
+            await carregarEncomendas();
         }
 
         /* =========================================================
