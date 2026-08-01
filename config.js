@@ -13,9 +13,9 @@ const CONFIG = {
     SUPABASE_ANON_KEY: "sb_publishable_0uCOFv-r3Zdv3yOuBdWvEA_2toOfN4F",      // a "anon public key" do teu projeto Supabase
 
     // --- EmailJS (envio do código de confirmação por email) ---
-    EMAILJS_PUBLIC_KEY: "",     // Account > General > Public Key
-    EMAILJS_SERVICE_ID: "",     // Email Services > o teu serviço
-    EMAILJS_TEMPLATE_ID: "",    // Email Templates > o teu template
+    EMAILJS_PUBLIC_KEY: "vYjj34J0rHyW7yZKd",     // Account > General > Public Key
+    EMAILJS_SERVICE_ID: "service_jf6x9zs",     // Email Services > o teu serviço
+    EMAILJS_TEMPLATE_ID: "template_60pkqlg",    // Email Templates > o teu template
 
     // --- WhatsApp do dono/loja (aviso rápido, além do email) ---
     WHATSAPP_NUMERO: "351215959525",
